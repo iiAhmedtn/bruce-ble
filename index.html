@@ -1,1168 +1,383 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
 <meta charset="UTF-8">
-<meta name="viewport"
-      content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-
-<title>Bruce File Editor</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bruce BLE Test</title>
 
 <style>
-* {
-  box-sizing: border-box;
+body{
+  margin:0;
+  padding:15px;
+  background:#000;
+  color:#fff;
+  font-family:monospace;
 }
 
-html, body {
-  margin: 0;
-  width: 100%;
-  height: 100%;
-  background: #000;
-  color: #fff;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+button{
+  background:#181818;
+  color:#fff;
+  border:1px solid #444;
+  padding:12px;
+  margin:4px;
+  border-radius:8px;
 }
 
-body {
-  display: flex;
-  flex-direction: column;
-  height: 100dvh;
+button:active{
+  background:#333;
 }
 
-#top {
-  padding: 10px;
-  border-bottom: 1px solid #222;
+#status{
+  margin:10px 0;
+  color:#aaa;
 }
 
-.row {
-  display: flex;
-  gap: 7px;
-  margin-bottom: 8px;
+#log{
+  white-space:pre-wrap;
+  word-break:break-word;
+  background:#090909;
+  border:1px solid #222;
+  padding:10px;
+  min-height:300px;
 }
 
-button {
-  border: 1px solid #333;
-  background: #171717;
-  color: white;
-  border-radius: 8px;
-  padding: 10px 13px;
-  font-size: 13px;
-}
-
-button:active {
-  background: #333;
-}
-
-button:disabled {
-  opacity: .35;
-}
-
-button.primary {
-  background: #0a84ff;
-  border-color: #0a84ff;
-}
-
-#path {
-  width: 100%;
-  background: #111;
-  border: 1px solid #333;
-  color: white;
-  border-radius: 8px;
-  padding: 10px;
-  font-family: monospace;
-  font-size: 13px;
-}
-
-#status {
-  color: #888;
-  font-size: 11px;
-  margin-top: 7px;
-  white-space: pre-wrap;
-}
-
-#editor {
-  flex: 1;
-  width: 100%;
-  resize: none;
-  outline: none;
-  border: 0;
-  background: #000;
-  color: #fff;
-  padding: 15px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 16px;
-  line-height: 1.5;
-  tab-size: 2;
-}
-
-#editor::placeholder {
-  color: #444;
-}
-
-#logBox {
-  border-top: 1px solid #222;
-  background: #080808;
-}
-
-summary {
-  padding: 8px 10px;
-  color: #777;
-  font: 11px monospace;
-}
-
-#log {
-  max-height: 150px;
-  overflow: auto;
-  padding: 5px 10px 10px;
-  font: 11px monospace;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.log-in {
-  color: #45ff9a;
-}
-
-.log-out {
-  color: #7aa7ff;
-}
-
-.log-error {
-  color: #ff6666;
+input{
+  width:100%;
+  box-sizing:border-box;
+  background:#111;
+  color:#fff;
+  border:1px solid #444;
+  padding:12px;
+  margin-bottom:10px;
+  font-family:monospace;
 }
 </style>
 </head>
 
 <body>
 
-<div id="top">
+<h3>Bruce BLE Test</h3>
 
-  <div class="row">
-    <button id="connect">Connect</button>
-    <button id="sync" disabled>Sync</button>
-    <button id="save" disabled class="primary">Save</button>
-    <button id="clear">Clear</button>
-  </div>
+<button id="connect">CONNECT</button>
 
-  <input
-    id="path"
-    value="LittleFS://!CHEAT/reader.txt"
-    spellcheck="false"
-    autocomplete="off"
-    autocapitalize="off"
-  >
+<input
+ id="path"
+ value="/!CHEAT/reader.txt"
+>
 
-  <div id="status">
-    Not connected.
-  </div>
+<div id="status">Disconnected</div>
 
-</div>
+<br>
 
-<textarea
-  id="editor"
-  spellcheck="false"
-  autocorrect="off"
-  autocapitalize="off"
-  autocomplete="off"
-  placeholder="Type or paste your file here..."
-></textarea>
+<button onclick="send('storage list /')">
+LIST ROOT
+</button>
 
-<details id="logBox">
-  <summary>BLE DEBUG LOG</summary>
-  <div id="log"></div>
-</details>
+<button onclick="readFile()">
+READ FILE
+</button>
+
+<button onclick="testWrite()">
+TEST WRITE
+</button>
+
+<button onclick="clearLog()">
+CLEAR
+</button>
+
+<pre id="log"></pre>
+
 
 <script>
 
-(() => {
+const SERIAL_SERVICE =
+"4371ec0b-3d43-49f9-b731-7c72a4a7bb91";
 
-  /* =========================================================
-     BRUCE BLE
-     ========================================================= */
+const SERIAL_CHAR =
+"d555ed97-bf2a-4f46-b3eb-d1fcdd7325e9";
 
-  const SERIAL_SERVICE =
-    "4371ec0b-3d43-49f9-b731-7c72a4a7bb91";
+let device = null;
+let server = null;
+let characteristic = null;
 
-  const SERIAL_CHAR =
-    "d555ed97-bf2a-4f46-b3eb-d1fcdd7325e9";
+const encoder = new TextEncoder();
+const decoder = new TextDecoder();
 
-  const NUS_SERVICE =
-    "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
+const log =
+document.getElementById("log");
 
-  const NUS_RX =
-    "6e400002-b5a3-f393-e0a9-e50e24dcca9e";
-
-  const NUS_TX =
-    "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
+const status =
+document.getElementById("status");
 
 
-  /* =========================================================
-     ELEMENTS
-     ========================================================= */
+function print(text){
 
-  const connectBtn = document.getElementById("connect");
-  const syncBtn = document.getElementById("sync");
-  const saveBtn = document.getElementById("save");
-  const clearBtn = document.getElementById("clear");
+  log.textContent += text;
 
-  const pathInput = document.getElementById("path");
-  const editor = document.getElementById("editor");
-  const status = document.getElementById("status");
-  const log = document.getElementById("log");
+  log.scrollTop =
+    log.scrollHeight;
+
+}
 
 
-  /* =========================================================
-     STATE
-     ========================================================= */
+function clearLog(){
 
-  let device = null;
-  let server = null;
+  log.textContent = "";
 
-  let writeChar = null;
-  let notifyChar = null;
-
-  let connected = false;
-
-  let incomingBuffer = "";
-
-  const encoder = new TextEncoder();
-  const decoder = new TextDecoder();
+}
 
 
-  /* =========================================================
-     LOCAL BACKUP
-     ========================================================= */
+async function connect(){
 
-  const BACKUP_KEY = "bruce_file_editor_backup";
+  try{
 
-  try {
-    editor.value =
-      localStorage.getItem(BACKUP_KEY) || "";
-  } catch (_) {}
+    print("\n=== CONNECTING ===\n");
 
-  editor.addEventListener("input", () => {
+    device =
+      await navigator.bluetooth.requestDevice({
 
-    try {
-      localStorage.setItem(
-        BACKUP_KEY,
-        editor.value
-      );
-    } catch (_) {}
+        acceptAllDevices:true,
 
-  });
+        optionalServices:[
+          SERIAL_SERVICE
+        ]
 
+      });
 
-  /* =========================================================
-     UI
-     ========================================================= */
-
-  function setStatus(text) {
-    status.textContent = text;
-  }
-
-  function setConnected(value) {
-
-    connected = value;
-
-    connectBtn.textContent =
-      value ? "Disconnect" : "Connect";
-
-    connectBtn.classList.toggle(
-      "primary",
-      value
+    print(
+      "Device: " +
+      (device.name || "unknown") +
+      "\n"
     );
 
-    syncBtn.disabled = !value;
-    saveBtn.disabled = !value;
 
-  }
+    device.addEventListener(
+      "gattserverdisconnected",
+      ()=>{
+        status.textContent =
+          "Disconnected";
 
-  function addLog(text, type = "") {
-
-    const div = document.createElement("div");
-
-    if (type === "in")
-      div.className = "log-in";
-
-    if (type === "out")
-      div.className = "log-out";
-
-    if (type === "error")
-      div.className = "log-error";
-
-    div.textContent = text;
-
-    log.appendChild(div);
-
-    log.scrollTop = log.scrollHeight;
-  }
-
-
-  /* =========================================================
-     PATH CONVERSION
-     =========================================================
-
-     User can enter:
-
-       LittleFS://!CHEAT/reader.txt
-       littlefs://!CHEAT/reader.txt
-       /!CHEAT/reader.txt
-       !CHEAT/reader.txt
-
-     Bruce CLI receives:
-
-       /!CHEAT/reader.txt
-  */
-
-  function getBrucePath() {
-
-    let p = pathInput.value.trim();
-
-    if (!p) {
-      throw new Error("Path is empty");
-    }
-
-    p = p.replace(/\\/g, "/");
-
-    /* Remove filesystem prefix */
-
-    p = p.replace(
-      /^littlefs:\/\//i,
-      ""
-    );
-
-    p = p.replace(
-      /^littlefs\//i,
-      ""
-    );
-
-    p = p.replace(
-      /^sd:\/\//i,
-      ""
-    );
-
-    p = p.replace(
-      /^sd\//i,
-      ""
-    );
-
-    /* Remove duplicate slashes */
-
-    p = p.replace(/^\/+/, "");
-
-    /* Bruce storage paths are rooted */
-
-    return "/" + p;
-  }
-
-
-  /* =========================================================
-     BLE NOTIFICATIONS
-     ========================================================= */
-
-  function onNotification(event) {
-
-    const text =
-      decoder.decode(
-        event.target.value
-      );
-
-    incomingBuffer += text;
-
-    addLog(
-      "< " + text.replace(/\r/g, "\\r")
-                .replace(/\n/g, "\\n"),
-      "in"
-    );
-  }
-
-
-  /* =========================================================
-     WRITE BLE
-     ========================================================= */
-
-  async function writeBytes(bytes) {
-
-    if (!writeChar)
-      throw new Error("BLE write characteristic unavailable");
-
-    /*
-      Do NOT assume 20 bytes is always required.
-
-      writeValueWithResponse is much more reliable
-      when supported by the characteristic.
-    */
-
-    const chunkSize = 20;
-
-    for (
-      let i = 0;
-      i < bytes.length;
-      i += chunkSize
-    ) {
-
-      const chunk =
-        bytes.slice(
-          i,
-          Math.min(
-            i + chunkSize,
-            bytes.length
-          )
+        print(
+          "\n=== DISCONNECTED ===\n"
         );
-
-      if (
-        writeChar.writeValueWithResponse
-      ) {
-
-        await writeChar
-          .writeValueWithResponse(chunk);
-
-      } else {
-
-        await writeChar
-          .writeValue(chunk);
-
       }
-
-      await sleep(15);
-    }
-  }
-
-
-  async function sendCommand(command) {
-
-    /*
-      Bruce BLE uses CRLF.
-    */
-
-    addLog(
-      "> " + command,
-      "out"
     );
 
-    incomingBuffer = "";
 
-    const bytes =
-      encoder.encode(
-        command + "\r\n"
+    server =
+      await device.gatt.connect();
+
+
+    print("GATT connected\n");
+
+
+    const service =
+      await server.getPrimaryService(
+        SERIAL_SERVICE
       );
 
-    await writeBytes(bytes);
-  }
+
+    characteristic =
+      await service.getCharacteristic(
+        SERIAL_CHAR
+      );
 
 
-  function sleep(ms) {
-
-    return new Promise(
-      resolve => setTimeout(resolve, ms)
+    print(
+      "Characteristic found\n"
     );
 
-  }
+
+    await characteristic.startNotifications();
 
 
-  /* =========================================================
-     WAIT FOR RESPONSE
-     ========================================================= */
+    characteristic.addEventListener(
+      "characteristicvaluechanged",
+      event => {
 
-  async function collectResponse(
-    command,
-    idleTime = 900,
-    maxTime = 8000
-  ) {
-
-    incomingBuffer = "";
-
-    await sendCommand(command);
-
-    const start =
-      Date.now();
-
-    let lastData =
-      Date.now();
-
-    let previousLength = 0;
-
-    while (
-      Date.now() - start < maxTime
-    ) {
-
-      await sleep(100);
-
-      if (
-        incomingBuffer.length !==
-        previousLength
-      ) {
-
-        previousLength =
-          incomingBuffer.length;
-
-        lastData =
-          Date.now();
-      }
-
-      /*
-        Bruce sends CRLF.
-
-        Once data has stopped arriving
-        for idleTime, consider the response
-        complete.
-      */
-
-      if (
-        incomingBuffer.length > 0 &&
-        Date.now() - lastData >= idleTime
-      ) {
-
-        break;
-      }
-
-    }
-
-    return incomingBuffer;
-  }
-
-
-  /* =========================================================
-     CLEAN BRUCE RESPONSE
-     ========================================================= */
-
-  function cleanResponse(
-    response,
-    command
-  ) {
-
-    let result = response;
-
-    /*
-      Remove echoed command.
-    */
-
-    result =
-      result.replace(
-        command,
-        ""
-      );
-
-    /*
-      Remove CR.
-    */
-
-    result =
-      result.replace(/\r/g, "");
-
-    /*
-      Remove empty lines around content.
-    */
-
-    result =
-      result.replace(
-        /^\n+/,
-        ""
-      );
-
-    result =
-      result.replace(
-        /\n+$/,
-        ""
-      );
-
-    return result;
-  }
-
-
-  /* =========================================================
-     CONNECT
-     ========================================================= */
-
-  async function connect() {
-
-    if (!navigator.bluetooth) {
-
-      alert(
-        "Web Bluetooth is not available in this browser."
-      );
-
-      return;
-    }
-
-    try {
-
-      setStatus(
-        "Opening Bluetooth device picker..."
-      );
-
-      /*
-        Bruce sometimes doesn't expose the
-        service UUID in advertisements.
-
-        Therefore acceptAllDevices is intentional.
-      */
-
-      device =
-        await navigator.bluetooth.requestDevice({
-
-          acceptAllDevices: true,
-
-          optionalServices: [
-            SERIAL_SERVICE,
-            NUS_SERVICE
-          ]
-
-        });
-
-
-      device.addEventListener(
-        "gattserverdisconnected",
-        disconnected
-      );
-
-
-      setStatus(
-        "Connecting to " +
-        (device.name || "Bruce") +
-        "..."
-      );
-
-
-      server =
-        await device.gatt.connect();
-
-
-      /*
-        Try Bruce's native service first.
-      */
-
-      try {
-
-        const service =
-          await server.getPrimaryService(
-            SERIAL_SERVICE
+        const data =
+          decoder.decode(
+            event.target.value
           );
 
-        const characteristic =
-          await service.getCharacteristic(
-            SERIAL_CHAR
-          );
-
-        writeChar =
-          characteristic;
-
-        notifyChar =
-          characteristic;
+        print(
+          "\n<<< BRUCE <<<\n" +
+          JSON.stringify(data) +
+          "\n"
+        );
 
       }
-
-      catch (_) {
-
-        /*
-          NUS fallback
-        */
-
-        const service =
-          await server.getPrimaryService(
-            NUS_SERVICE
-          );
-
-        writeChar =
-          await service.getCharacteristic(
-            NUS_RX
-          );
-
-        notifyChar =
-          await service.getCharacteristic(
-            NUS_TX
-          );
-
-      }
-
-
-      await notifyChar.startNotifications();
-
-
-      notifyChar.addEventListener(
-        "characteristicvaluechanged",
-        onNotification
-      );
-
-
-      setConnected(true);
-
-      setStatus(
-        "Connected to " +
-        (device.name || "Bruce")
-      );
-
-      addLog(
-        "BLE connected",
-        "in"
-      );
-
-
-      /*
-        Don't automatically sync.
-
-        This is important because the user may
-        already have text in the editor.
-      */
-
-    }
-
-    catch (error) {
-
-      addLog(
-        "CONNECT ERROR: " +
-        error.name +
-        " - " +
-        error.message,
-        "error"
-      );
-
-      setStatus(
-        "Connection failed: " +
-        error.message
-      );
-
-      setConnected(false);
-    }
-  }
-
-
-  /* =========================================================
-     DISCONNECT
-     ========================================================= */
-
-  function disconnected() {
-
-    setConnected(false);
-
-    writeChar = null;
-    notifyChar = null;
-
-    setStatus(
-      "Disconnected. Local copy is still available."
     );
 
-    addLog(
-      "BLE disconnected",
-      "error"
+
+    status.textContent =
+      "CONNECTED";
+
+    print(
+      "\n=== READY ===\n"
     );
+
   }
+  catch(e){
 
-
-  function disconnect() {
-
-    if (
-      device &&
-      device.gatt &&
-      device.gatt.connected
-    ) {
-
-      device.gatt.disconnect();
-
-    } else {
-
-      disconnected();
-
-    }
+    print(
+      "\nCONNECT ERROR:\n" +
+      e.name +
+      "\n" +
+      e.message +
+      "\n"
+    );
 
   }
 
+}
 
-  /* =========================================================
-     SYNC
-     =========================================================
 
-     Sync behavior:
+async function write(text){
 
-     Bruce file:
-       hello
-       world
+  const data =
+    encoder.encode(text);
 
-     Existing editor:
-       test
+  const chunkSize = 20;
 
-     Result:
-       hello
-       world
 
-       test
+  for(
+    let i=0;
+    i<data.length;
+    i+=chunkSize
+  ){
 
-     If editor is empty:
-       just Bruce contents.
-
-     If same content already exists:
-       don't duplicate it.
-  */
-
-  async function syncFile() {
-
-    if (!connected)
-      return;
-
-    try {
-
-      const path =
-        getBrucePath();
-
-      setStatus(
-        "Reading " +
-        path +
-        " ..."
+    const chunk =
+      data.slice(
+        i,
+        i+chunkSize
       );
 
-      const command =
-        "storage read " +
-        path;
 
-      const raw =
-        await collectResponse(
-          command,
-          1000,
-          8000
-        );
+    if(
+      characteristic.writeValueWithResponse
+    ){
 
-      let remote =
-        cleanResponse(
-          raw,
-          command
-        );
+      await characteristic
+        .writeValueWithResponse(chunk);
 
-      /*
-        Bruce may return CLI messages.
-      */
+    }
+    else{
 
-      if (
-        /file not found/i.test(remote) ||
-        /no such/i.test(remote) ||
-        /failed/i.test(remote) ||
-        /error/i.test(remote)
-      ) {
-
-        setStatus(
-          "File could not be read."
-        );
-
-        addLog(
-          remote,
-          "error"
-        );
-
-        return;
-      }
-
-
-      /*
-        If nothing came back,
-        don't destroy the editor.
-      */
-
-      if (!remote.trim()) {
-
-        setStatus(
-          "Bruce file is empty or returned no data."
-        );
-
-        return;
-      }
-
-
-      const local =
-        editor.value;
-
-
-      if (!local.trim()) {
-
-        editor.value =
-          remote;
-
-      }
-
-      else if (
-        local === remote
-      ) {
-
-        /*
-          Already identical.
-        */
-
-      }
-
-      else if (
-        !local.includes(remote)
-      ) {
-
-        /*
-          Add Bruce content ABOVE
-          existing editor content.
-        */
-
-        editor.value =
-          remote +
-          "\n\n" +
-          local;
-
-      }
-
-      else {
-
-        /*
-          Remote content already exists
-          somewhere in editor.
-        */
-
-      }
-
-
-      saveBackup();
-
-
-      setStatus(
-        "Synced " +
-        path +
-        " — Bruce content added to editor."
-      );
+      await characteristic
+        .writeValue(chunk);
 
     }
 
-    catch (error) {
 
-      addLog(
-        "SYNC ERROR: " +
-        error.message,
-        "error"
-      );
-
-      setStatus(
-        "Sync failed: " +
-        error.message
-      );
-    }
-  }
-
-
-  /* =========================================================
-     SAVE
-     =========================================================
-
-     Bruce's text upload protocol:
-
-       storage write /path
-       line 1
-       line 2
-       line 3
-       EOF
-
-     Each line is sent separately.
-  */
-
-  async function saveFile() {
-
-    if (!connected)
-      return;
-
-    try {
-
-      const path =
-        getBrucePath();
-
-      const text =
-        editor.value;
-
-      setStatus(
-        "Saving " +
-        path +
-        " ..."
-      );
-
-
-      /*
-        Start Bruce storage write mode.
-      */
-
-      await sendCommand(
-        "storage write " +
-        path
-      );
-
-
-      await sleep(250);
-
-
-      /*
-        IMPORTANT:
-        Bruce expects the upload as lines.
-      */
-
-      const lines =
-        text.split(/\r?\n/);
-
-
-      for (
-        let i = 0;
-        i < lines.length;
-        i++
-      ) {
-
-        const line =
-          lines[i];
-
-        /*
-          Send exactly one line.
-        */
-
-        await writeBytes(
-          encoder.encode(
-            line + "\r\n"
-          )
-        );
-
-        /*
-          Pace BLE writes.
-
-          This is especially important on
-          ESP32 Bruce devices.
-        */
-
-        await sleep(35);
-      }
-
-
-      /*
-        End Bruce's write mode.
-      */
-
-      await writeBytes(
-        encoder.encode(
-          "EOF\r\n"
-        )
-      );
-
-
-      await sleep(700);
-
-
-      saveBackup();
-
-
-      setStatus(
-        "Saved successfully to " +
-        path
-      );
-
-      addLog(
-        "SAVE COMPLETE",
-        "in"
-      );
-
-    }
-
-    catch (error) {
-
-      addLog(
-        "SAVE ERROR: " +
-        error.message,
-        "error"
-      );
-
-      setStatus(
-        "Save failed: " +
-        error.message
-      );
-    }
-  }
-
-
-  /* =========================================================
-     LOCAL BACKUP
-     ========================================================= */
-
-  function saveBackup() {
-
-    try {
-
-      localStorage.setItem(
-        BACKUP_KEY,
-        editor.value
-      );
-
-    }
-
-    catch (_) {}
+    await new Promise(
+      r=>setTimeout(r,30)
+    );
 
   }
 
-
-  /* =========================================================
-     BUTTONS
-     ========================================================= */
-
-  connectBtn.addEventListener(
-    "click",
-    () => {
-
-      if (connected)
-        disconnect();
-      else
-        connect();
-
-    }
-  );
+}
 
 
-  syncBtn.addEventListener(
-    "click",
-    syncFile
-  );
+async function send(command){
+
+  if(!characteristic){
+
+    print(
+      "\nNOT CONNECTED\n"
+    );
+
+    return;
+  }
 
 
-  saveBtn.addEventListener(
-    "click",
-    saveFile
-  );
-
-
-  clearBtn.addEventListener(
-    "click",
-    () => {
-
-      if (
-        confirm(
-          "Clear the editor?"
-        )
-      ) {
-
-        editor.value = "";
-
-        saveBackup();
-
-      }
-
-    }
+  print(
+    "\n>>> BRUCE >>>\n" +
+    JSON.stringify(command) +
+    "\n"
   );
 
 
   /*
-    Allow Enter in the path box normally,
-    but don't accidentally submit anything.
+    Bruce serial commands use CRLF.
   */
 
-  pathInput.addEventListener(
-    "keydown",
-    event => {
-
-      if (
-        event.key === "Enter"
-      ) {
-
-        event.preventDefault();
-
-        if (connected)
-          syncFile();
-
-      }
-
-    }
+  await write(
+    command + "\r\n"
   );
 
-})();
+}
+
+
+function readFile(){
+
+  const path =
+    document.getElementById("path")
+      .value
+      .trim();
+
+
+  send(
+    "storage read " +
+    path
+  );
+
+}
+
+
+function testWrite(){
+
+  const path =
+    document.getElementById("path")
+      .value
+      .trim();
+
+
+  /*
+    VERY small test.
+
+    If this works, we know writing works.
+  */
+
+  send(
+    "storage write " +
+    path
+  );
+
+
+  setTimeout(
+    async ()=>{
+
+      await write(
+        "WEB TEST\r\n"
+      );
+
+      await new Promise(
+        r=>setTimeout(r,100)
+      );
+
+      await write(
+        "EOF\r\n"
+      );
+
+      print(
+        "\nUPLOAD SENT\n"
+      );
+
+    },
+    500
+  );
+
+}
+
+
+document
+.getElementById("connect")
+.addEventListener(
+  "click",
+  connect
+);
+
 </script>
 
 </body>
