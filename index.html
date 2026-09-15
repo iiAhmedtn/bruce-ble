@@ -181,6 +181,7 @@
     <button class="connbtn" id="connBtn">Connect</button>
   </div>
   <div class="status-line" id="statusLine">not connected</div>
+  <div class="status-line" id="diagLine" style="margin-top:2px;"></div>
 </header>
 
 <main>
@@ -404,12 +405,35 @@
   }
   setConnectedUI(false);
 
+  // Diagnostics — Bluefy has no console, so surface this on-page.
+  const diagLine = $("diagLine");
+  (function diagnose(){
+    const bits = [];
+    bits.push("secure context: " + (window.isSecureContext ? "yes" : "NO"));
+    bits.push("navigator.bluetooth: " + (navigator.bluetooth ? "present" : "MISSING"));
+    bits.push(location.protocol);
+    diagLine.textContent = bits.join(" · ");
+    if (!window.isSecureContext) {
+      diagLine.style.color = "var(--danger)";
+      diagLine.textContent += " — open this page over https:// (a file:// page will not show the Bluetooth picker)";
+    } else if (!navigator.bluetooth) {
+      diagLine.style.color = "var(--danger)";
+      diagLine.textContent += " — this browser has no Web Bluetooth API; in Bluefy check Settings → Bluefy → Bluetooth & Location are allowed";
+    }
+  })();
+
   if (!navigator.bluetooth) {
     setStatus("", "Web Bluetooth isn't available in this browser.");
     connBtn.disabled = true;
   }
 
   async function connect(){
+    if (!navigator.bluetooth) {
+      alert("Web Bluetooth isn't available here.\n\nisSecureContext: " + window.isSecureContext +
+            "\nprotocol: " + location.protocol +
+            "\n\nIf you're in Bluefy: open this file over https:// (not by opening it locally), and check iOS Settings → Bluefy → Bluetooth and Location are both allowed.");
+      return;
+    }
     try {
       setStatus("connecting", "scanning for a Bruce device…");
       device = await navigator.bluetooth.requestDevice({
@@ -442,7 +466,17 @@
     } catch (err) {
       console.error(err);
       setStatus("", "connection failed: " + err.message);
-      logLine("connect error: " + err.message, "err");
+      logLine("connect error: " + err.name + ": " + err.message, "err");
+      if (err.name === "NotFoundError") {
+        // User cancelled the picker, or (more often on iOS) it never opened / found nothing.
+        alert("No device picker appeared, or it was closed without a selection.\n\n" +
+              "If you never saw a picker at all: this page needs to be served over https:// " +
+              "for Bluefy to expose Bluetooth — a plain local file won't trigger it.\n\n" +
+              "If a picker did appear but was empty: on the Bruce, go to Config → Advanced → " +
+              "Toggle BLE API (it's off by default), and make sure it's powered on and nearby.");
+      } else {
+        alert("Bluetooth error: " + err.name + " — " + err.message);
+      }
       setConnectedUI(false);
     }
   }
