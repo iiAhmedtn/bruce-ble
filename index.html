@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Bruce · BLE Control</title>
+<style>
+  :root{
+    --bg: #0b0f0d;
+    --panel: #101613;
+    --panel-2: #141c18;
+    --line: #223028;
+    --text: #d7e7dc;
+    --dim: #6f8579;
+    --accent: #4dff9f;
+    --accent-dim: #2b9c66;
+    --warn: #ffb454;
+    --danger: #ff5d5d;
+    --mono: "SF Mono", "JetBrains Mono", ui-monospace, Menlo, Consolas, "Courier New", monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:var(--sans);}
+  body{padding-bottom:48px;}
+  ::selection{background:var(--accent-dim);color:#04120a;}
+
+  header{
+    position:sticky;top:0;z-index:20;
+    background:linear-gradient(180deg, rgba(11,15,13,.98), rgba(11,15,13,.9));
+    backdrop-filter:blur(6px);
+    border-bottom:1px solid var(--line);
+    padding:14px 16px 12px;
+  }
+  .brand{display:flex;align-items:center;justify-content:space-between;gap:12px;}
+  .brand h1{
+    font-family:var(--mono);
+    font-size:15px;letter-spacing:.02em;margin:0;color:var(--text);
+    display:flex;align-items:center;gap:8px;
+  }
+  .brand h1 .dot{width:8px;height:8px;border-radius:50%;background:var(--dim);flex:none;transition:background .2s, box-shadow .2s;}
+  .brand h1 .dot.connected{background:var(--accent);box-shadow:0 0 10px var(--accent);}
+  .brand h1 .dot.connecting{background:var(--warn);box-shadow:0 0 8px var(--warn);animation:pulse 1s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.35;}}
+
+  .connbtn{
+    font-family:var(--mono);font-size:13px;
+    background:transparent;color:var(--accent);
+    border:1px solid var(--accent-dim);
+    padding:8px 14px;border-radius:3px;cursor:pointer;
+    transition:background .15s, color .15s;
+  }
+  .connbtn:active{transform:translateY(1px);}
+  .connbtn.on{background:var(--accent);color:#04120a;border-color:var(--accent);}
+  .status-line{
+    font-family:var(--mono);font-size:11px;color:var(--dim);
+    margin-top:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+
+  main{max-width:720px;margin:0 auto;padding:16px;}
+
+  .card{
+    background:var(--panel);border:1px solid var(--line);
+    border-radius:4px;margin-bottom:14px;overflow:hidden;
+  }
+  .card h2{
+    font-family:var(--mono);font-size:11px;text-transform:none;
+    color:var(--dim);margin:0;padding:10px 14px;
+    border-bottom:1px solid var(--line);
+    display:flex;align-items:center;justify-content:space-between;
+    letter-spacing:.01em;
+  }
+  .card h2 small{color:var(--dim);font-weight:400;}
+  .card .body{padding:14px;}
+
+  /* Terminal */
+  #term{
+    font-family:var(--mono);font-size:12.5px;line-height:1.5;
+    background:#070a08;color:#b9d9c4;
+    height:220px;overflow-y:auto;padding:10px 12px;
+    border-bottom:1px solid var(--line);
+    white-space:pre-wrap;word-break:break-word;
+  }
+  #term .in{color:var(--accent);}
+  #term .out{color:#9fb8ab;}
+  #term .sys{color:var(--warn);}
+  #term .err{color:var(--danger);}
+
+  .termrow{display:flex;gap:8px;padding:10px 12px;}
+  .termrow input{
+    flex:1;font-family:var(--mono);font-size:13px;
+    background:var(--panel-2);border:1px solid var(--line);color:var(--text);
+    padding:9px 10px;border-radius:3px;outline:none;
+  }
+  .termrow input:focus{border-color:var(--accent-dim);}
+  .termrow button{
+    font-family:var(--mono);font-size:13px;
+    background:var(--accent-dim);color:#04120a;border:none;
+    padding:9px 14px;border-radius:3px;cursor:pointer;font-weight:600;
+  }
+  .termrow button:disabled, .quickbtns button:disabled, .connbtn:disabled{opacity:.35;cursor:not-allowed;}
+
+  .quickbtns{display:flex;flex-wrap:wrap;gap:6px;padding:0 12px 12px;}
+  .quickbtns button{
+    font-family:var(--mono);font-size:11.5px;
+    background:transparent;border:1px solid var(--line);color:var(--dim);
+    padding:6px 9px;border-radius:3px;cursor:pointer;
+  }
+  .quickbtns button:hover{border-color:var(--accent-dim);color:var(--text);}
+
+  /* generic form rows */
+  .row{display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;}
+  .row > *{flex:1;min-width:110px;}
+  label.f{display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--dim);font-family:var(--mono);flex:1;min-width:110px;}
+  input[type=text], input[type=number], select{
+    font-family:var(--mono);font-size:13px;
+    background:var(--panel-2);border:1px solid var(--line);color:var(--text);
+    padding:8px 9px;border-radius:3px;outline:none;width:100%;
+  }
+  input:focus, select:focus{border-color:var(--accent-dim);}
+  .btnrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:2px;}
+  button.action{
+    font-family:var(--mono);font-size:12.5px;font-weight:600;
+    background:var(--accent-dim);color:#04120a;border:none;
+    padding:8px 13px;border-radius:3px;cursor:pointer;
+  }
+  button.action.secondary{background:transparent;color:var(--accent);border:1px solid var(--accent-dim);font-weight:400;}
+  button.action.danger{background:var(--danger);color:#2a0505;}
+  button.action:disabled{opacity:.35;cursor:not-allowed;}
+
+  .hint{font-size:11.5px;color:var(--dim);line-height:1.5;margin:6px 0 0;}
+  .hint b{color:#a9c2b3;font-weight:600;}
+
+  /* dpad */
+  .dpad-wrap{display:flex;align-items:center;justify-content:center;gap:26px;padding:6px 0 4px;flex-wrap:wrap;}
+  .dpad{display:grid;grid-template-columns:52px 52px 52px;grid-template-rows:52px 52px 52px;gap:6px;}
+  .dpad button{
+    font-family:var(--mono);font-size:16px;
+    background:var(--panel-2);border:1px solid var(--line);color:var(--text);
+    border-radius:6px;cursor:pointer;
+  }
+  .dpad button:active{background:var(--accent-dim);color:#04120a;}
+  .dpad .u{grid-column:2;grid-row:1;}
+  .dpad .l{grid-column:1;grid-row:2;}
+  .dpad .ok{grid-column:2;grid-row:2;color:var(--accent);}
+  .dpad .r{grid-column:3;grid-row:2;}
+  .dpad .d{grid-column:2;grid-row:3;}
+  .sidebtns{display:flex;flex-direction:column;gap:8px;}
+  .sidebtns button{
+    font-family:var(--mono);font-size:12px;min-width:74px;
+    background:var(--panel-2);border:1px solid var(--line);color:var(--text);
+    padding:10px 8px;border-radius:6px;cursor:pointer;
+  }
+  .sidebtns button:active{background:var(--accent-dim);color:#04120a;}
+
+  .keymap{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;}
+  .keymap label{font-family:var(--mono);font-size:10.5px;color:var(--dim);display:flex;flex-direction:column;gap:3px;width:70px;}
+  .keymap input{font-size:11px;padding:5px 6px;}
+
+  details summary{cursor:pointer;font-family:var(--mono);font-size:11.5px;color:var(--dim);padding:2px 0;}
+
+  .led-row{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+  .led-row span{width:14px;font-family:var(--mono);font-size:12px;color:var(--dim);}
+  .led-row input[type=range]{flex:1;accent-color:var(--accent);}
+  .led-row output{width:34px;text-align:right;font-family:var(--mono);font-size:12px;color:var(--dim);}
+  .swatch{width:100%;height:26px;border-radius:3px;border:1px solid var(--line);margin-top:6px;}
+
+  footer{max-width:720px;margin:0 auto;padding:4px 16px 30px;color:var(--dim);font-size:11px;font-family:var(--mono);line-height:1.6;}
+  a{color:var(--accent-dim);}
+  code{background:var(--panel-2);padding:1px 5px;border-radius:3px;font-family:var(--mono);}
+
+  @media (max-width:420px){
+    .dpad-wrap{gap:16px;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <h1><span class="dot" id="statusDot"></span>bruce// ble control</h1>
+    <button class="connbtn" id="connBtn">Connect</button>
+  </div>
+  <div class="status-line" id="statusLine">not connected</div>
+</header>
+
+<main>
+
+  <!-- Terminal -->
+  <div class="card">
+    <h2>Terminal <small>raw serial</small></h2>
+    <div id="term"></div>
+    <div class="termrow">
+      <input type="text" id="cmdInput" placeholder="type a command, e.g. info" autocomplete="off" autocapitalize="off" spellcheck="false" disabled>
+      <button id="sendBtn" disabled>Send</button>
+    </div>
+    <div class="quickbtns">
+      <button data-cmd="info">info</button>
+      <button data-cmd="free">free</button>
+      <button data-cmd="storage free">storage free</button>
+      <button data-cmd="uptime">uptime</button>
+      <button data-cmd="date">date</button>
+      <button data-cmd="settings">settings</button>
+      <button data-cmd="i2c scan">i2c scan</button>
+      <button data-cmd="storage list /">storage list /</button>
+    </div>
+  </div>
+
+  <!-- Remote control -->
+  <div class="card">
+    <h2>Remote control <small>experimental</small></h2>
+    <div class="body">
+      <p class="hint">Drives the device's on-screen menus. Bruce doesn't publish a fixed
+      key protocol over serial, so this sends whatever text you set below, followed by
+      a newline — edit the fields to match what your firmware build actually listens for
+      if the defaults don't do anything (check <b>Terminal</b> for the device's response).</p>
+      <div class="dpad-wrap">
+        <div class="dpad">
+          <button class="u" data-key="up">▲</button>
+          <button class="l" data-key="left">◀</button>
+          <button class="ok" data-key="ok">●</button>
+          <button class="r" data-key="right">▶</button>
+          <button class="d" data-key="down">▼</button>
+        </div>
+        <div class="sidebtns">
+          <button data-key="esc">ESC</button>
+          <button data-key="next">NEXT</button>
+          <button data-key="prev">PREV</button>
+        </div>
+      </div>
+      <details>
+        <summary>Edit key → command mapping</summary>
+        <div class="keymap" id="keymap"></div>
+      </details>
+    </div>
+  </div>
+
+  <!-- Power / LED / Audio -->
+  <div class="card">
+    <h2>Power &amp; UI</h2>
+    <div class="body">
+      <div class="btnrow">
+        <button class="action secondary" data-cmd="power sleep">Sleep</button>
+        <button class="action secondary" data-cmd="power reboot">Reboot</button>
+        <button class="action danger" data-cmd="power off">Power off</button>
+        <button class="action secondary" data-cmd="clock">Show clock</button>
+      </div>
+
+      <p class="hint" style="margin-top:14px;"><b>LED / main color</b></p>
+      <div class="led-row"><span>R</span><input type="range" min="0" max="255" value="77" id="ledR"><output id="ledRv">77</output></div>
+      <div class="led-row"><span>G</span><input type="range" min="0" max="255" value="255" id="ledG"><output id="ledGv">255</output></div>
+      <div class="led-row"><span>B</span><input type="range" min="0" max="255" value="159" id="ledB"><output id="ledBv">159</output></div>
+      <div class="swatch" id="ledSwatch"></div>
+      <div class="btnrow"><button class="action" id="ledSend">Set color</button></div>
+
+      <p class="hint" style="margin-top:14px;"><b>Audio</b> (needs a speaker)</p>
+      <div class="row">
+        <input type="text" id="sayInput" placeholder="text to speak">
+        <button class="action secondary" id="sayBtn">Say</button>
+      </div>
+      <div class="row">
+        <input type="number" id="toneFreq" placeholder="Hz" value="440">
+        <input type="number" id="toneDur" placeholder="ms" value="300">
+        <button class="action secondary" id="toneBtn">Beep</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Infrared -->
+  <div class="card">
+    <h2>Infrared</h2>
+    <div class="body">
+      <div class="row">
+        <label class="f">rx timeout (s)<input type="number" id="irRxTimeout" value="10"></label>
+        <div style="display:flex;align-items:flex-end;"><button class="action" id="irRxBtn" style="width:100%">Capture (ir rx)</button></div>
+        <div style="display:flex;align-items:flex-end;"><button class="action secondary" id="irRxRawBtn" style="width:100%">Capture RAW</button></div>
+      </div>
+      <div class="row">
+        <input type="text" id="irFile" placeholder="/BruceIR/file.ir">
+        <button class="action" id="irTxFileBtn">Send file</button>
+      </div>
+      <div class="row">
+        <input type="text" id="irProto" placeholder="protocol (NEC…)">
+        <input type="text" id="irAddr" placeholder="address">
+        <input type="text" id="irVal" placeholder="value">
+      </div>
+      <div class="btnrow"><button class="action secondary" id="irTxBtn">Send decoded (ir tx)</button></div>
+      <p class="hint">Air conditioners generally need RAW captures — the firmware forces
+      RAW for AC state signals regardless of what you replay.</p>
+    </div>
+  </div>
+
+  <!-- Sub-GHz -->
+  <div class="card">
+    <h2>Sub-GHz / RF</h2>
+    <div class="body">
+      <div class="row">
+        <label class="f">rx timeout (s)<input type="number" id="rfRxTimeout" value="10"></label>
+        <div style="display:flex;align-items:flex-end;"><button class="action" id="rfRxBtn" style="width:100%">Capture (subghz rx)</button></div>
+        <div style="display:flex;align-items:flex-end;"><button class="action secondary" id="rfRxRawBtn" style="width:100%">Capture RAW</button></div>
+      </div>
+      <div class="row">
+        <input type="text" id="rfFile" placeholder="/BruceRF/file.sub">
+        <button class="action" id="rfTxFileBtn">Send file</button>
+      </div>
+      <div class="row">
+        <input type="text" id="rfKey" placeholder="hex key">
+        <input type="text" id="rfFreq" placeholder="frequency (Hz)" value="433920000">
+        <input type="text" id="rfTe" placeholder="te">
+        <input type="text" id="rfCount" placeholder="count" value="10">
+      </div>
+      <div class="btnrow"><button class="action secondary" id="rfTxBtn">Send custom (subghz tx)</button></div>
+    </div>
+  </div>
+
+  <!-- Storage -->
+  <div class="card">
+    <h2>Storage</h2>
+    <div class="body">
+      <div class="row">
+        <input type="text" id="stPath" placeholder="/path or file">
+      </div>
+      <div class="btnrow">
+        <button class="action secondary" data-storage="list">List</button>
+        <button class="action secondary" data-storage="read">Read</button>
+        <button class="action danger" data-storage="remove">Remove</button>
+        <button class="action secondary" data-storage="md5">MD5</button>
+      </div>
+      <p class="hint">Defaults to the SD card if one is mounted, LittleFS otherwise —
+      the firmware picks, there's no per-command override.</p>
+    </div>
+  </div>
+
+  <!-- Settings -->
+  <div class="card">
+    <h2>Settings</h2>
+    <div class="body">
+      <div class="row">
+        <input type="text" id="setName" placeholder="setting name (blank = view all)">
+        <input type="text" id="setValue" placeholder="new value (optional)">
+      </div>
+      <div class="btnrow">
+        <button class="action" id="setGetBtn">View</button>
+        <button class="action secondary" id="setSetBtn">Set</button>
+        <button class="action danger" id="factoryResetBtn">Factory reset</button>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<footer>
+  Requires a browser with the Web Bluetooth API (e.g. Bluefy on iOS, or Chrome/Edge on
+  desktop/Android) served from a secure context (https://, or a local file the browser
+  trusts). Turn on <code>Config → Advanced → Toggle BLE API</code> on the Bruce before
+  connecting. Commands follow the
+  <a href="https://wiki.bruce.computer/controlling-device/serial/" target="_blank" rel="noopener">Bruce serial reference</a> —
+  the on-screen navigation keys aren't part of that public spec, so treat the Remote
+  control card as a starting point to adjust for your firmware.
+</footer>
+
+<script>
+(() => {
+  const SERIAL_SERVICE = "4371ec0b-3d43-49f9-b731-7c72a4a7bb91";
+  const SERIAL_CHAR    = "d555ed97-bf2a-4f46-b3eb-d1fcdd7325e9"; // write + notify, single char
+  const NUS_SERVICE     = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
+  const NUS_RX           = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"; // write (app -> device)
+  const NUS_TX           = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"; // notify (device -> app)
+  const BATTERY_SERVICE = 0x180f;
+
+  let device = null, server = null;
+  let writeChar = null, notifyChar = null;
+  let rxBuf = "";
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+
+  const $ = (id) => document.getElementById(id);
+  const term = $("term");
+  const statusDot = $("statusDot");
+  const statusLine = $("statusLine");
+  const connBtn = $("connBtn");
+  const cmdInput = $("cmdInput");
+  const sendBtn = $("sendBtn");
+
+  function setStatus(state, text){
+    statusDot.className = "dot" + (state ? " " + state : "");
+    statusLine.textContent = text;
+  }
+
+  function logLine(text, cls){
+    const div = document.createElement("div");
+    div.className = cls || "out";
+    div.textContent = text;
+    term.appendChild(div);
+    term.scrollTop = term.scrollHeight;
+  }
+
+  function setConnectedUI(connected){
+    connBtn.textContent = connected ? "Disconnect" : "Connect";
+    connBtn.classList.toggle("on", connected);
+    cmdInput.disabled = !connected;
+    sendBtn.disabled = !connected;
+    document.querySelectorAll(".action, .quickbtns button, .dpad button, .sidebtns button")
+      .forEach(b => b.disabled = !connected);
+  }
+  setConnectedUI(false);
+
+  if (!navigator.bluetooth) {
+    setStatus("", "Web Bluetooth isn't available in this browser.");
+    connBtn.disabled = true;
+  }
+
+  async function connect(){
+    try {
+      setStatus("connecting", "scanning for a Bruce device…");
+      device = await navigator.bluetooth.requestDevice({
+        filters: [{ namePrefix: "Bruc" }],
+        optionalServices: [SERIAL_SERVICE, NUS_SERVICE, BATTERY_SERVICE]
+      });
+      device.addEventListener("gattserverdisconnected", onDisconnected);
+      setStatus("connecting", "connecting to " + (device.name || "device") + "…");
+      server = await device.gatt.connect();
+
+      let usedProtocol = "";
+      try {
+        const svc = await server.getPrimaryService(SERIAL_SERVICE);
+        const ch = await svc.getCharacteristic(SERIAL_CHAR);
+        writeChar = ch; notifyChar = ch;
+        usedProtocol = "custom serial service";
+      } catch (e1) {
+        const svc = await server.getPrimaryService(NUS_SERVICE);
+        writeChar = await svc.getCharacteristic(NUS_RX);
+        notifyChar = await svc.getCharacteristic(NUS_TX);
+        usedProtocol = "Nordic UART fallback";
+      }
+
+      await notifyChar.startNotifications();
+      notifyChar.addEventListener("characteristicvaluechanged", onNotify);
+
+      setStatus("connected", (device.name || "Bruce") + " — " + usedProtocol);
+      setConnectedUI(true);
+      logLine("connected via " + usedProtocol, "sys");
+    } catch (err) {
+      console.error(err);
+      setStatus("", "connection failed: " + err.message);
+      logLine("connect error: " + err.message, "err");
+      setConnectedUI(false);
+    }
+  }
+
+  function onDisconnected(){
+    setStatus("", "disconnected");
+    setConnectedUI(false);
+    logLine("disconnected", "sys");
+    writeChar = null; notifyChar = null;
+  }
+
+  async function disconnect(){
+    if (device && device.gatt.connected) device.gatt.disconnect();
+    else onDisconnected();
+  }
+
+  function onNotify(event){
+    const chunk = decoder.decode(event.target.value);
+    rxBuf += chunk;
+    const lines = rxBuf.split(/\r\n|\n/);
+    rxBuf = lines.pop();
+    for (const line of lines) if (line.length) logLine(line, "out");
+  }
+
+  // Chunked write: some builds/MTUs choke on long single writes.
+  async function writeRaw(bytes){
+    const CHUNK = 20;
+    for (let i = 0; i < bytes.length; i += CHUNK) {
+      const slice = bytes.slice(i, i + CHUNK);
+      if (writeChar.writeValueWithoutResponse) {
+        await writeChar.writeValueWithoutResponse(slice);
+      } else {
+        await writeChar.writeValue(slice);
+      }
+      if (bytes.length > CHUNK) await new Promise(r => setTimeout(r, 15));
+    }
+  }
+
+  async function sendCommand(cmd){
+    if (!writeChar) { logLine("not connected", "err"); return; }
+    logLine("> " + cmd, "in");
+    try {
+      await writeRaw(encoder.encode(cmd + "\n"));
+    } catch (err) {
+      logLine("send error: " + err.message, "err");
+    }
+  }
+  window.__bruceSend = sendCommand; // handy for console debugging
+
+  connBtn.addEventListener("click", () => {
+    if (device && device.gatt.connected) disconnect();
+    else connect();
+  });
+
+  sendBtn.addEventListener("click", () => {
+    const v = cmdInput.value.trim();
+    if (!v) return;
+    sendCommand(v);
+    cmdInput.value = "";
+  });
+  cmdInput.addEventListener("keydown", (e) => { if (e.key === "Enter") sendBtn.click(); });
+
+  document.querySelectorAll(".quickbtns [data-cmd]").forEach(btn => {
+    btn.addEventListener("click", () => sendCommand(btn.dataset.cmd));
+  });
+  document.querySelectorAll(".btnrow [data-cmd]").forEach(btn => {
+    btn.addEventListener("click", () => sendCommand(btn.dataset.cmd));
+  });
+
+  // Remote control keymap
+  const defaultKeys = {
+    up: "up", down: "down", left: "left", right: "right",
+    ok: "ok", esc: "esc", next: "next", prev: "prev"
+  };
+  const keymapEl = $("keymap");
+  Object.keys(defaultKeys).forEach(k => {
+    const label = document.createElement("label");
+    label.innerHTML = k.toUpperCase();
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = defaultKeys[k];
+    input.id = "key_" + k;
+    label.appendChild(input);
+    keymapEl.appendChild(label);
+  });
+  document.querySelectorAll("[data-key]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const key = btn.dataset.key;
+      const input = $("key_" + key);
+      const cmd = (input ? input.value.trim() : "") || defaultKeys[key];
+      sendCommand(cmd);
+    });
+  });
+
+  // LED
+  function updateSwatch(){
+    const r = $("ledR").value, g = $("ledG").value, b = $("ledB").value;
+    $("ledRv").textContent = r; $("ledGv").textContent = g; $("ledBv").textContent = b;
+    $("ledSwatch").style.background = "rgb(" + r + "," + g + "," + b + ")";
+  }
+  ["ledR","ledG","ledB"].forEach(id => $(id).addEventListener("input", updateSwatch));
+  updateSwatch();
+  $("ledSend").addEventListener("click", async () => {
+    await sendCommand("led r " + $("ledR").value);
+    await sendCommand("led g " + $("ledG").value);
+    await sendCommand("led b " + $("ledB").value);
+  });
+
+  // Audio
+  $("sayBtn").addEventListener("click", () => {
+    const t = $("sayInput").value.trim();
+    if (t) sendCommand("say " + t);
+  });
+  $("toneBtn").addEventListener("click", () => {
+    const f = $("toneFreq").value.trim() || "440";
+    const d = $("toneDur").value.trim() || "300";
+    sendCommand("tone " + f + " " + d);
+  });
+
+  // IR
+  $("irRxBtn").addEventListener("click", () => sendCommand("ir rx " + ($("irRxTimeout").value || "10")));
+  $("irRxRawBtn").addEventListener("click", () => sendCommand("ir rx raw " + ($("irRxTimeout").value || "10")));
+  $("irTxFileBtn").addEventListener("click", () => {
+    const f = $("irFile").value.trim();
+    if (f) sendCommand("ir tx_from_file " + f);
+  });
+  $("irTxBtn").addEventListener("click", () => {
+    const p = $("irProto").value.trim(), a = $("irAddr").value.trim(), v = $("irVal").value.trim();
+    if (p && a && v) sendCommand("ir tx " + p + " " + a + " " + v);
+  });
+
+  // Sub-GHz
+  $("rfRxBtn").addEventListener("click", () => sendCommand("subghz rx " + ($("rfRxTimeout").value || "10")));
+  $("rfRxRawBtn").addEventListener("click", () => sendCommand("subghz rx raw " + ($("rfRxTimeout").value || "10")));
+  $("rfTxFileBtn").addEventListener("click", () => {
+    const f = $("rfFile").value.trim();
+    if (f) sendCommand("subghz tx_from_file " + f);
+  });
+  $("rfTxBtn").addEventListener("click", () => {
+    const k = $("rfKey").value.trim(), fr = $("rfFreq").value.trim(),
+          te = $("rfTe").value.trim(), c = $("rfCount").value.trim();
+    if (k && fr && te && c) sendCommand("subghz tx " + k + " " + fr + " " + te + " " + c);
+  });
+
+  // Storage
+  document.querySelectorAll("[data-storage]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const path = $("stPath").value.trim();
+      if (!path) { logLine("enter a path first", "err"); return; }
+      sendCommand("storage " + btn.dataset.storage + " " + path);
+    });
+  });
+
+  // Settings
+  $("setGetBtn").addEventListener("click", () => {
+    const n = $("setName").value.trim();
+    sendCommand(n ? "settings " + n : "settings");
+  });
+  $("setSetBtn").addEventListener("click", () => {
+    const n = $("setName").value.trim(), v = $("setValue").value.trim();
+    if (n && v) sendCommand("settings " + n + " " + v);
+    else logLine("need both a setting name and a value", "err");
+  });
+  $("factoryResetBtn").addEventListener("click", () => {
+    if (confirm("Reset bruce.conf to defaults?")) sendCommand("factory_reset");
+  });
+
+})();
+</script>
+</body>
+</html>
