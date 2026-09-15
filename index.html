@@ -1,382 +1,955 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Bruce BLE Test</title>
+<meta name="viewport"
+      content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+
+<title>Bruce Reader</title>
 
 <style>
-body{
-  margin:0;
-  padding:15px;
-  background:#000;
-  color:#fff;
-  font-family:monospace;
+* {
+  box-sizing: border-box;
 }
 
-button{
-  background:#181818;
-  color:#fff;
-  border:1px solid #444;
-  padding:12px;
-  margin:4px;
-  border-radius:8px;
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background: #000;
+  color: #fff;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
-button:active{
-  background:#333;
+body {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
 }
 
-#status{
-  margin:10px 0;
-  color:#aaa;
+#top {
+  padding: 10px;
+  border-bottom: 1px solid #222;
 }
 
-#log{
-  white-space:pre-wrap;
-  word-break:break-word;
-  background:#090909;
-  border:1px solid #222;
-  padding:10px;
-  min-height:300px;
+#file {
+  background: #111;
+  border: 1px solid #333;
+  border-radius: 7px;
+  padding: 8px 10px;
+  color: #aaa;
+  font: 12px monospace;
+  margin-bottom: 8px;
 }
 
-input{
-  width:100%;
-  box-sizing:border-box;
-  background:#111;
-  color:#fff;
-  border:1px solid #444;
-  padding:12px;
-  margin-bottom:10px;
-  font-family:monospace;
+.buttons {
+  display: flex;
+  gap: 7px;
+}
+
+button {
+  flex: 1;
+  padding: 10px 8px;
+  border-radius: 8px;
+  border: 1px solid #333;
+  background: #181818;
+  color: #fff;
+  font-size: 13px;
+}
+
+button:active {
+  background: #333;
+}
+
+button:disabled {
+  opacity: .35;
+}
+
+#connect.connected {
+  background: #087f3d;
+  border-color: #087f3d;
+}
+
+#save {
+  background: #0a84ff;
+  border-color: #0a84ff;
+}
+
+#status {
+  padding-top: 7px;
+  color: #888;
+  font-size: 11px;
+}
+
+#editor {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  resize: none;
+  border: 0;
+  outline: 0;
+  background: #000;
+  color: #fff;
+  padding: 16px;
+
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Consolas,
+    monospace;
+
+  font-size: 16px;
+  line-height: 1.5;
+
+  -webkit-text-size-adjust: 100%;
+}
+
+#editor::placeholder {
+  color: #444;
+}
+
+details {
+  border-top: 1px solid #222;
+  background: #080808;
+}
+
+summary {
+  padding: 7px 10px;
+  color: #666;
+  font: 11px monospace;
+}
+
+#log {
+  max-height: 150px;
+  overflow-y: auto;
+  padding: 5px 10px 10px;
+
+  white-space: pre-wrap;
+  word-break: break-word;
+
+  font: 11px monospace;
+}
+
+.in {
+  color: #4dff9f;
+}
+
+.out {
+  color: #70a7ff;
+}
+
+.err {
+  color: #ff6666;
 }
 </style>
 </head>
 
 <body>
 
-<h3>Bruce BLE Test</h3>
+<div id="top">
 
-<button id="connect">CONNECT</button>
+  <div id="file">
+    LittleFS://!CHEAT/reader.txt
+  </div>
 
-<input
- id="path"
- value="/!CHEAT/reader.txt"
->
+  <div class="buttons">
 
-<div id="status">Disconnected</div>
+    <button id="connect">
+      Connect
+    </button>
 
-<br>
+    <button id="sync" disabled>
+      Sync
+    </button>
 
-<button onclick="send('storage list /')">
-LIST ROOT
-</button>
+    <button id="save" disabled>
+      Save
+    </button>
 
-<button onclick="readFile()">
-READ FILE
-</button>
+  </div>
 
-<button onclick="testWrite()">
-TEST WRITE
-</button>
+  <div id="status">
+    Not connected
+  </div>
 
-<button onclick="clearLog()">
-CLEAR
-</button>
+</div>
 
-<pre id="log"></pre>
+<textarea
+  id="editor"
+  placeholder="Type or paste here..."
+  spellcheck="false"
+  autocorrect="off"
+  autocapitalize="off"
+  autocomplete="off"
+></textarea>
+
+<details>
+  <summary>BLE DEBUG</summary>
+  <div id="log"></div>
+</details>
 
 
 <script>
 
-const SERIAL_SERVICE =
-"4371ec0b-3d43-49f9-b731-7c72a4a7bb91";
+(() => {
 
-const SERIAL_CHAR =
-"d555ed97-bf2a-4f46-b3eb-d1fcdd7325e9";
+  /*
+  ============================================================
+  FIXED FILE
+  ============================================================
+  */
 
-let device = null;
-let server = null;
-let characteristic = null;
-
-const encoder = new TextEncoder();
-const decoder = new TextDecoder();
-
-const log =
-document.getElementById("log");
-
-const status =
-document.getElementById("status");
+  const BRUCE_PATH = "!CHEAT/reader.txt";
 
 
-function print(text){
+  /*
+  ============================================================
+  BRUCE BLE UUIDs
+  ============================================================
+  */
 
-  log.textContent += text;
+  const SERIAL_SERVICE =
+    "4371ec0b-3d43-49f9-b731-7c72a4a7bb91";
 
-  log.scrollTop =
-    log.scrollHeight;
-
-}
-
-
-function clearLog(){
-
-  log.textContent = "";
-
-}
+  const SERIAL_CHAR =
+    "d555ed97-bf2a-4f46-b3eb-d1fcdd7325e9";
 
 
-async function connect(){
+  /*
+  ============================================================
+  ELEMENTS
+  ============================================================
+  */
 
-  try{
+  const connectBtn =
+    document.getElementById("connect");
 
-    print("\n=== CONNECTING ===\n");
+  const syncBtn =
+    document.getElementById("sync");
 
-    device =
-      await navigator.bluetooth.requestDevice({
+  const saveBtn =
+    document.getElementById("save");
 
-        acceptAllDevices:true,
+  const editor =
+    document.getElementById("editor");
 
-        optionalServices:[
+  const status =
+    document.getElementById("status");
+
+  const log =
+    document.getElementById("log");
+
+
+  /*
+  ============================================================
+  STATE
+  ============================================================
+  */
+
+  let device = null;
+  let characteristic = null;
+  let connected = false;
+
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+
+  let response = "";
+
+
+  /*
+  ============================================================
+  LOCAL BACKUP
+  ============================================================
+  */
+
+  const BACKUP =
+    "bruce_reader_backup";
+
+  try {
+
+    editor.value =
+      localStorage.getItem(BACKUP) || "";
+
+  } catch (_) {}
+
+
+  editor.addEventListener(
+    "input",
+    () => {
+
+      try {
+
+        localStorage.setItem(
+          BACKUP,
+          editor.value
+        );
+
+      } catch (_) {}
+
+    }
+  );
+
+
+  /*
+  ============================================================
+  LOG
+  ============================================================
+  */
+
+  function addLog(text, type) {
+
+    const div =
+      document.createElement("div");
+
+    div.textContent = text;
+
+    if (type)
+      div.className = type;
+
+    log.appendChild(div);
+
+    log.scrollTop =
+      log.scrollHeight;
+  }
+
+
+  function setStatus(text) {
+
+    status.textContent = text;
+
+  }
+
+
+  /*
+  ============================================================
+  BLE NOTIFICATION
+  ============================================================
+  */
+
+  function notification(event) {
+
+    const text =
+      decoder.decode(
+        event.target.value
+      );
+
+    response += text;
+
+    addLog(
+      "<< " +
+      JSON.stringify(text),
+      "in"
+    );
+
+  }
+
+
+  /*
+  ============================================================
+  WRITE BYTES
+  ============================================================
+  */
+
+  async function writeBytes(bytes) {
+
+    const CHUNK = 20;
+
+    for (
+      let i = 0;
+      i < bytes.length;
+      i += CHUNK
+    ) {
+
+      const chunk =
+        bytes.slice(
+          i,
+          i + CHUNK
+        );
+
+      /*
+       * Use response writes when available.
+       * This prevents overflowing the ESP32 BLE
+       * receive buffer.
+       */
+
+      if (
+        typeof characteristic
+          .writeValueWithResponse ===
+        "function"
+      ) {
+
+        await characteristic
+          .writeValueWithResponse(chunk);
+
+      } else {
+
+        await characteristic
+          .writeValue(chunk);
+
+      }
+
+      await sleep(30);
+
+    }
+
+  }
+
+
+  function sleep(ms) {
+
+    return new Promise(
+      resolve =>
+        setTimeout(resolve, ms)
+    );
+
+  }
+
+
+  /*
+  ============================================================
+  SEND BRUCE COMMAND
+  ============================================================
+  */
+
+  async function command(text) {
+
+    response = "";
+
+    addLog(
+      ">> " + JSON.stringify(text),
+      "out"
+    );
+
+    /*
+     * Bruce serial CLI command terminator.
+     */
+
+    await writeBytes(
+      encoder.encode(
+        text + "\r\n"
+      )
+    );
+
+  }
+
+
+  /*
+  ============================================================
+  CONNECT
+  ============================================================
+  */
+
+  async function connect() {
+
+    if (!navigator.bluetooth) {
+
+      alert(
+        "Web Bluetooth is not available in this browser."
+      );
+
+      return;
+
+    }
+
+
+    try {
+
+      setStatus(
+        "Opening Bluetooth..."
+      );
+
+
+      device =
+        await navigator.bluetooth.requestDevice({
+
+          acceptAllDevices: true,
+
+          optionalServices: [
+            SERIAL_SERVICE
+          ]
+
+        });
+
+
+      device.addEventListener(
+        "gattserverdisconnected",
+        disconnected
+      );
+
+
+      setStatus(
+        "Connecting to " +
+        (device.name || "Bruce") +
+        "..."
+      );
+
+
+      const server =
+        await device.gatt.connect();
+
+
+      const service =
+        await server.getPrimaryService(
           SERIAL_SERVICE
-        ]
-
-      });
-
-    print(
-      "Device: " +
-      (device.name || "unknown") +
-      "\n"
-    );
-
-
-    device.addEventListener(
-      "gattserverdisconnected",
-      ()=>{
-        status.textContent =
-          "Disconnected";
-
-        print(
-          "\n=== DISCONNECTED ===\n"
-        );
-      }
-    );
-
-
-    server =
-      await device.gatt.connect();
-
-
-    print("GATT connected\n");
-
-
-    const service =
-      await server.getPrimaryService(
-        SERIAL_SERVICE
-      );
-
-
-    characteristic =
-      await service.getCharacteristic(
-        SERIAL_CHAR
-      );
-
-
-    print(
-      "Characteristic found\n"
-    );
-
-
-    await characteristic.startNotifications();
-
-
-    characteristic.addEventListener(
-      "characteristicvaluechanged",
-      event => {
-
-        const data =
-          decoder.decode(
-            event.target.value
-          );
-
-        print(
-          "\n<<< BRUCE <<<\n" +
-          JSON.stringify(data) +
-          "\n"
         );
 
-      }
-    );
+
+      characteristic =
+        await service.getCharacteristic(
+          SERIAL_CHAR
+        );
 
 
-    status.textContent =
-      "CONNECTED";
-
-    print(
-      "\n=== READY ===\n"
-    );
-
-  }
-  catch(e){
-
-    print(
-      "\nCONNECT ERROR:\n" +
-      e.name +
-      "\n" +
-      e.message +
-      "\n"
-    );
-
-  }
-
-}
+      await characteristic
+        .startNotifications();
 
 
-async function write(text){
-
-  const data =
-    encoder.encode(text);
-
-  const chunkSize = 20;
-
-
-  for(
-    let i=0;
-    i<data.length;
-    i+=chunkSize
-  ){
-
-    const chunk =
-      data.slice(
-        i,
-        i+chunkSize
+      characteristic.addEventListener(
+        "characteristicvaluechanged",
+        notification
       );
 
 
-    if(
-      characteristic.writeValueWithResponse
-    ){
+      connected = true;
 
-      await characteristic
-        .writeValueWithResponse(chunk);
+      connectBtn.textContent =
+        "Disconnect";
 
-    }
-    else{
+      connectBtn.classList.add(
+        "connected"
+      );
 
-      await characteristic
-        .writeValue(chunk);
+      syncBtn.disabled = false;
+      saveBtn.disabled = false;
+
+
+      setStatus(
+        "Connected to " +
+        (device.name || "Bruce")
+      );
+
+
+      addLog(
+        "BLE CONNECTED",
+        "in"
+      );
 
     }
 
+    catch (error) {
 
-    await new Promise(
-      r=>setTimeout(r,30)
+      addLog(
+        "CONNECT ERROR: " +
+        error.message,
+        "err"
+      );
+
+      setStatus(
+        "Connection failed: " +
+        error.message
+      );
+
+    }
+
+  }
+
+
+  /*
+  ============================================================
+  DISCONNECT
+  ============================================================
+  */
+
+  function disconnected() {
+
+    connected = false;
+
+    characteristic = null;
+
+    connectBtn.textContent =
+      "Connect";
+
+    connectBtn.classList.remove(
+      "connected"
+    );
+
+    syncBtn.disabled = true;
+    saveBtn.disabled = true;
+
+    setStatus(
+      "Disconnected"
+    );
+
+    addLog(
+      "BLE DISCONNECTED",
+      "err"
     );
 
   }
 
-}
 
+  function disconnect() {
 
-async function send(command){
+    if (
+      device &&
+      device.gatt &&
+      device.gatt.connected
+    ) {
 
-  if(!characteristic){
+      device.gatt.disconnect();
 
-    print(
-      "\nNOT CONNECTED\n"
-    );
+    } else {
 
-    return;
+      disconnected();
+
+    }
+
   }
 
 
-  print(
-    "\n>>> BRUCE >>>\n" +
-    JSON.stringify(command) +
-    "\n"
-  );
+  /*
+  ============================================================
+  SYNC
+  ============================================================
+
+  Reads ONLY:
+
+      !CHEAT/reader.txt
+
+  IMPORTANT:
+
+  Sync replaces the editor with the actual
+  Bruce file.
+
+  This avoids accidentally saving old browser
+  content back into Bruce.
+  */
+
+  async function sync() {
+
+    if (!connected)
+      return;
+
+
+    try {
+
+      setStatus(
+        "Reading !CHEAT/reader.txt..."
+      );
+
+
+      const commandText =
+        "storage read " +
+        BRUCE_PATH;
+
+
+      response = "";
+
+
+      await command(
+        commandText
+      );
+
+
+      /*
+       * Wait for Bruce to finish sending.
+       */
+
+      await sleep(1500);
+
+
+      let data =
+        response;
+
+
+      /*
+       * Remove command echo if Bruce
+       * sends it.
+       */
+
+      data =
+        data.replace(
+          commandText,
+          ""
+        );
+
+
+      /*
+       * Normalize CRLF.
+       */
+
+      data =
+        data.replace(
+          /\r/g,
+          ""
+        );
+
+
+      /*
+       * Remove leading/trailing blank lines.
+       */
+
+      data =
+        data.replace(
+          /^\n+/,
+          ""
+        );
+
+      data =
+        data.replace(
+          /\n+$/,
+          ""
+        );
+
+
+      /*
+       * Detect actual errors.
+       */
+
+      if (
+        /ERROR:/i.test(data) ||
+        /not found/i.test(data) ||
+        /no such file/i.test(data)
+      ) {
+
+        addLog(
+          "READ ERROR: " + data,
+          "err"
+        );
+
+        setStatus(
+          "Bruce could not read the file."
+        );
+
+        return;
+
+      }
+
+
+      /*
+       * Don't replace the editor with
+       * nothing if no response arrived.
+       */
+
+      if (!data.trim()) {
+
+        addLog(
+          "Bruce returned no file data.",
+          "err"
+        );
+
+        setStatus(
+          "No data returned."
+        );
+
+        return;
+
+      }
+
+
+      /*
+       * THIS IS THE IMPORTANT PART:
+       *
+       * The editor now becomes the actual
+       * contents of reader.txt.
+       */
+
+      editor.value =
+        data;
+
+
+      try {
+
+        localStorage.setItem(
+          BACKUP,
+          editor.value
+        );
+
+      } catch (_) {}
+
+
+      setStatus(
+        "Synced from LittleFS://!CHEAT/reader.txt"
+      );
+
+
+    }
+
+    catch (error) {
+
+      addLog(
+        "SYNC ERROR: " +
+        error.message,
+        "err"
+      );
+
+      setStatus(
+        "Sync failed."
+      );
+
+    }
+
+  }
 
 
   /*
-    Bruce serial commands use CRLF.
+  ============================================================
+  SAVE
+  ============================================================
+
+  Writes ONLY:
+
+      !CHEAT/reader.txt
   */
 
-  await write(
-    command + "\r\n"
-  );
+  async function save() {
 
-}
-
-
-function readFile(){
-
-  const path =
-    document.getElementById("path")
-      .value
-      .trim();
+    if (!connected)
+      return;
 
 
-  send(
-    "storage read " +
-    path
-  );
+    try {
 
-}
+      const text =
+        editor.value;
 
 
-function testWrite(){
+      setStatus(
+        "Saving to LittleFS://!CHEAT/reader.txt..."
+      );
 
-  const path =
-    document.getElementById("path")
-      .value
-      .trim();
+
+      /*
+       * Tell Bruce we are beginning
+       * a storage upload.
+       */
+
+      await command(
+        "storage write " +
+        BRUCE_PATH
+      );
+
+
+      /*
+       * Give Bruce time to enter
+       * file-write mode.
+       */
+
+      await sleep(300);
+
+
+      /*
+       * Send every line separately.
+       *
+       * IMPORTANT:
+       * File data uses LF.
+       */
+
+      const lines =
+        text.split(/\r?\n/);
+
+
+      for (
+        const line of lines
+      ) {
+
+        await writeBytes(
+          encoder.encode(
+            line + "\n"
+          )
+        );
+
+        await sleep(35);
+
+      }
+
+
+      /*
+       * Finish upload.
+       */
+
+      await writeBytes(
+        encoder.encode(
+          "EOF\n"
+        )
+      );
+
+
+      await sleep(1000);
+
+
+      try {
+
+        localStorage.setItem(
+          BACKUP,
+          text
+        );
+
+      } catch (_) {}
+
+
+      setStatus(
+        "Saved to LittleFS://!CHEAT/reader.txt"
+      );
+
+
+      addLog(
+        "SAVE COMPLETE",
+        "in"
+      );
+
+    }
+
+    catch (error) {
+
+      addLog(
+        "SAVE ERROR: " +
+        error.message,
+        "err"
+      );
+
+      setStatus(
+        "Save failed."
+      );
+
+    }
+
+  }
 
 
   /*
-    VERY small test.
-
-    If this works, we know writing works.
+  ============================================================
+  BUTTON EVENTS
+  ============================================================
   */
 
-  send(
-    "storage write " +
-    path
+  connectBtn.addEventListener(
+    "click",
+    () => {
+
+      if (connected)
+        disconnect();
+      else
+        connect();
+
+    }
   );
 
 
-  setTimeout(
-    async ()=>{
-
-      await write(
-        "WEB TEST\r\n"
-      );
-
-      await new Promise(
-        r=>setTimeout(r,100)
-      );
-
-      await write(
-        "EOF\r\n"
-      );
-
-      print(
-        "\nUPLOAD SENT\n"
-      );
-
-    },
-    500
+  syncBtn.addEventListener(
+    "click",
+    sync
   );
 
-}
 
+  saveBtn.addEventListener(
+    "click",
+    save
+  );
 
-document
-.getElementById("connect")
-.addEventListener(
-  "click",
-  connect
-);
+})();
 
 </script>
 
