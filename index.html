@@ -437,8 +437,8 @@
     try {
       setStatus("connecting", "scanning for a Bruce device…");
       device = await navigator.bluetooth.requestDevice({
-        filters: [{ namePrefix: "Bruc" }],
-        optionalServices: [SERIAL_SERVICE, NUS_SERVICE, BATTERY_SERVICE]
+        acceptAllDevices: true,
+        optionalServices: [SERIAL_SERVICE, NUS_SERVICE, "battery_service"]
       });
       device.addEventListener("gattserverdisconnected", onDisconnected);
       setStatus("connecting", "connecting to " + (device.name || "device") + "…");
@@ -501,16 +501,13 @@
     for (const line of lines) if (line.length) logLine(line, "out");
   }
 
-  // Chunked write: some builds/MTUs choke on long single writes.
+  // Chunked write-with-response: some builds/MTUs choke on long single writes,
+  // and writeValueWithoutResponse isn't reliably supported through Bluefy.
   async function writeRaw(bytes){
     const CHUNK = 20;
     for (let i = 0; i < bytes.length; i += CHUNK) {
       const slice = bytes.slice(i, i + CHUNK);
-      if (writeChar.writeValueWithoutResponse) {
-        await writeChar.writeValueWithoutResponse(slice);
-      } else {
-        await writeChar.writeValue(slice);
-      }
+      await writeChar.writeValue(slice);
       if (bytes.length > CHUNK) await new Promise(r => setTimeout(r, 15));
     }
   }
