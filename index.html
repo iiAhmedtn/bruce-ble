@@ -2,954 +2,771 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport"
-      content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-
-<title>Bruce Reader</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>Bruce Reader Editor</title>
 
 <style>
 * {
-  box-sizing: border-box;
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
 }
 
 html, body {
-  margin: 0;
-  padding: 0;
-  width: 100%;
-  height: 100%;
-  background: #000;
-  color: #fff;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    background: #000;
+    color: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
 body {
-  display: flex;
-  flex-direction: column;
-  height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
 }
 
-#top {
-  padding: 10px;
-  border-bottom: 1px solid #222;
+header {
+    padding: 14px;
+    border-bottom: 1px solid #222;
 }
 
-#file {
-  background: #111;
-  border: 1px solid #333;
-  border-radius: 7px;
-  padding: 8px 10px;
-  color: #aaa;
-  font: 12px monospace;
-  margin-bottom: 8px;
+.title {
+    font-size: 18px;
+    font-weight: 700;
 }
 
-.buttons {
-  display: flex;
-  gap: 7px;
+.path {
+    margin-top: 4px;
+    font-family: monospace;
+    font-size: 12px;
+    color: #888;
+}
+
+.controls {
+    display: flex;
+    gap: 8px;
+    padding: 10px;
+    border-bottom: 1px solid #222;
 }
 
 button {
-  flex: 1;
-  padding: 10px 8px;
-  border-radius: 8px;
-  border: 1px solid #333;
-  background: #181818;
-  color: #fff;
-  font-size: 13px;
+    flex: 1;
+    min-height: 44px;
+    border: 1px solid #444;
+    border-radius: 8px;
+    background: #111;
+    color: white;
+    font-size: 14px;
+    font-weight: 600;
 }
 
 button:active {
-  background: #333;
+    background: #222;
 }
 
 button:disabled {
-  opacity: .35;
-}
-
-#connect.connected {
-  background: #087f3d;
-  border-color: #087f3d;
-}
-
-#save {
-  background: #0a84ff;
-  border-color: #0a84ff;
-}
-
-#status {
-  padding-top: 7px;
-  color: #888;
-  font-size: 11px;
+    opacity: .35;
 }
 
 #editor {
-  flex: 1;
-  width: 100%;
-  min-height: 0;
-  resize: none;
-  border: 0;
-  outline: 0;
-  background: #000;
-  color: #fff;
-  padding: 16px;
-
-  font-family:
-    ui-monospace,
-    SFMono-Regular,
-    Menlo,
-    Consolas,
-    monospace;
-
-  font-size: 16px;
-  line-height: 1.5;
-
-  -webkit-text-size-adjust: 100%;
+    flex: 1;
+    width: 100%;
+    resize: none;
+    border: 0;
+    outline: 0;
+    padding: 14px;
+    background: #050505;
+    color: #fff;
+    font-family: monospace;
+    font-size: 15px;
+    line-height: 1.5;
+    tab-size: 4;
 }
 
-#editor::placeholder {
-  color: #444;
-}
-
-details {
-  border-top: 1px solid #222;
-  background: #080808;
-}
-
-summary {
-  padding: 7px 10px;
-  color: #666;
-  font: 11px monospace;
+#status {
+    min-height: 32px;
+    padding: 7px 12px;
+    border-top: 1px solid #222;
+    color: #aaa;
+    font-family: monospace;
+    font-size: 12px;
 }
 
 #log {
-  max-height: 150px;
-  overflow-y: auto;
-  padding: 5px 10px 10px;
-
-  white-space: pre-wrap;
-  word-break: break-word;
-
-  font: 11px monospace;
-}
-
-.in {
-  color: #4dff9f;
-}
-
-.out {
-  color: #70a7ff;
-}
-
-.err {
-  color: #ff6666;
+    max-height: 130px;
+    overflow-y: auto;
+    border-top: 1px solid #222;
+    padding: 8px 12px;
+    background: #020202;
+    color: #777;
+    font-family: monospace;
+    font-size: 11px;
+    white-space: pre-wrap;
 }
 </style>
 </head>
 
 <body>
 
-<div id="top">
+<header>
+    <div class="title">Bruce Reader Editor</div>
+    <div class="path">LittleFS://!CHEAT/reader.txt</div>
+</header>
 
-  <div id="file">
-    LittleFS://!CHEAT/reader.txt
-  </div>
-
-  <div class="buttons">
-
-    <button id="connect">
-      Connect
-    </button>
-
-    <button id="sync" disabled>
-      Sync
-    </button>
-
-    <button id="save" disabled>
-      Save
-    </button>
-
-  </div>
-
-  <div id="status">
-    Not connected
-  </div>
-
+<div class="controls">
+    <button id="connect">CONNECT</button>
+    <button id="sync" disabled>SYNC</button>
+    <button id="save" disabled>SAVE</button>
 </div>
 
-<textarea
-  id="editor"
-  placeholder="Type or paste here..."
-  spellcheck="false"
-  autocorrect="off"
-  autocapitalize="off"
-  autocomplete="off"
-></textarea>
+<textarea id="editor"
+    spellcheck="false"
+    autocorrect="off"
+    autocapitalize="off"
+    placeholder="File contents..."></textarea>
 
-<details>
-  <summary>BLE DEBUG</summary>
-  <div id="log"></div>
-</details>
-
+<div id="status">Disconnected</div>
+<div id="log"></div>
 
 <script>
 
-(() => {
+/* =========================================================
+   BRUCE BLE
+   ========================================================= */
 
-  /*
-  ============================================================
-  FIXED FILE
-  ============================================================
-  */
-
-  const BRUCE_PATH = "!CHEAT/reader.txt";
-
-
-  /*
-  ============================================================
-  BRUCE BLE UUIDs
-  ============================================================
-  */
-
-  const SERIAL_SERVICE =
+var BRUCE_SERVICE =
     "4371ec0b-3d43-49f9-b731-7c72a4a7bb91";
 
-  const SERIAL_CHAR =
+var BRUCE_CHARACTERISTIC =
     "d555ed97-bf2a-4f46-b3eb-d1fcdd7325e9";
 
+var NUS_SERVICE =
+    "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
 
-  /*
-  ============================================================
-  ELEMENTS
-  ============================================================
-  */
+var NUS_RX =
+    "6e400002-b5a3-f393-e0a9-e50e24dcca9e";
 
-  const connectBtn =
-    document.getElementById("connect");
-
-  const syncBtn =
-    document.getElementById("sync");
-
-  const saveBtn =
-    document.getElementById("save");
-
-  const editor =
-    document.getElementById("editor");
-
-  const status =
-    document.getElementById("status");
-
-  const log =
-    document.getElementById("log");
+var NUS_TX =
+    "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
 
 
-  /*
-  ============================================================
-  STATE
-  ============================================================
-  */
-
-  let device = null;
-  let characteristic = null;
-  let connected = false;
-
-  const encoder = new TextEncoder();
-  const decoder = new TextDecoder();
-
-  let response = "";
+/*
+ * EXACT TARGET.
+ * Do not change this.
+ */
+var TARGET_PATH = "!CHEAT/reader.txt";
 
 
-  /*
-  ============================================================
-  LOCAL BACKUP
-  ============================================================
-  */
+var device = null;
+var characteristic = null;
 
-  const BACKUP =
-    "bruce_reader_backup";
+var connected = false;
 
-  try {
-
-    editor.value =
-      localStorage.getItem(BACKUP) || "";
-
-  } catch (_) {}
+var rxBuffer = "";
+var notificationHandler = null;
 
 
-  editor.addEventListener(
-    "input",
-    () => {
+/* =========================================================
+   UI
+   ========================================================= */
 
-      try {
-
-        localStorage.setItem(
-          BACKUP,
-          editor.value
-        );
-
-      } catch (_) {}
-
-    }
-  );
+var connectButton = document.getElementById("connect");
+var syncButton = document.getElementById("sync");
+var saveButton = document.getElementById("save");
+var editor = document.getElementById("editor");
+var statusBox = document.getElementById("status");
+var logBox = document.getElementById("log");
 
 
-  /*
-  ============================================================
-  LOG
-  ============================================================
-  */
-
-  function addLog(text, type) {
-
-    const div =
-      document.createElement("div");
-
-    div.textContent = text;
-
-    if (type)
-      div.className = type;
-
-    log.appendChild(div);
-
-    log.scrollTop =
-      log.scrollHeight;
-  }
+function status(text) {
+    statusBox.textContent = text;
+}
 
 
-  function setStatus(text) {
+function log(text) {
+    logBox.textContent += text + "\n";
+    logBox.scrollTop = logBox.scrollHeight;
+}
 
-    status.textContent = text;
 
-  }
+function sleep(ms) {
+    return new Promise(function(resolve) {
+        setTimeout(resolve, ms);
+    });
+}
 
 
-  /*
-  ============================================================
-  BLE NOTIFICATION
-  ============================================================
-  */
+/* =========================================================
+   UTF-8
+   ========================================================= */
 
-  function notification(event) {
+function textToBytes(text) {
+    return new TextEncoder().encode(text);
+}
 
-    const text =
-      decoder.decode(
-        event.target.value
-      );
 
-    response += text;
+function bytesToText(data) {
+    return new TextDecoder().decode(data);
+}
 
-    addLog(
-      "<< " +
-      JSON.stringify(text),
-      "in"
+
+/* =========================================================
+   BLE NOTIFICATIONS
+   ========================================================= */
+
+function onNotification(event) {
+
+    var value = event.target.value;
+
+    var bytes = new Uint8Array(
+        value.buffer,
+        value.byteOffset,
+        value.byteLength
     );
 
-  }
+    var text = bytesToText(bytes);
+
+    rxBuffer += text;
+
+    log("<<< " + JSON.stringify(text));
+}
 
 
-  /*
-  ============================================================
-  WRITE BYTES
-  ============================================================
-  */
+/* =========================================================
+   WRITE
+   ========================================================= */
 
-  async function writeBytes(bytes) {
+async function bleWrite(text) {
 
-    const CHUNK = 20;
-
-    for (
-      let i = 0;
-      i < bytes.length;
-      i += CHUNK
-    ) {
-
-      const chunk =
-        bytes.slice(
-          i,
-          i + CHUNK
-        );
-
-      /*
-       * Use response writes when available.
-       * This prevents overflowing the ESP32 BLE
-       * receive buffer.
-       */
-
-      if (
-        typeof characteristic
-          .writeValueWithResponse ===
-        "function"
-      ) {
-
-        await characteristic
-          .writeValueWithResponse(chunk);
-
-      } else {
-
-        await characteristic
-          .writeValue(chunk);
-
-      }
-
-      await sleep(30);
-
+    if (!characteristic) {
+        throw new Error("BLE characteristic is not connected");
     }
 
-  }
+    var data = textToBytes(text);
+
+    /*
+     * Bruce expects the command as a BLE write.
+     *
+     * The official Bruce app uses the same serial transport.
+     */
+
+    if (characteristic.writeValueWithResponse) {
+        await characteristic.writeValueWithResponse(data);
+    } else {
+        await characteristic.writeValue(data);
+    }
+
+    log(">>> " + JSON.stringify(text));
+}
 
 
-  function sleep(ms) {
+/* =========================================================
+   CONNECT
+   ========================================================= */
 
-    return new Promise(
-      resolve =>
-        setTimeout(resolve, ms)
-    );
+async function connectBruce() {
 
-  }
+    if (!navigator.bluetooth) {
+        status("Web Bluetooth is not available");
+        return;
+    }
+
+    try {
+
+        status("Searching...");
+
+        device = await navigator.bluetooth.requestDevice({
+            acceptAllDevices: true,
+            optionalServices: [
+                BRUCE_SERVICE,
+                NUS_SERVICE
+            ]
+        });
+
+        log("DEVICE: " + (device.name || "Bruce"));
+
+        device.addEventListener(
+            "gattserverdisconnected",
+            disconnected
+        );
+
+        status("Connecting...");
+
+        var server = await device.gatt.connect();
+
+        /*
+         * First try Bruce's native serial service.
+         */
+
+        try {
+
+            var service =
+                await server.getPrimaryService(BRUCE_SERVICE);
+
+            characteristic =
+                await service.getCharacteristic(
+                    BRUCE_CHARACTERISTIC
+                );
+
+            log("Using Bruce BLE service");
+
+        } catch (e) {
+
+            /*
+             * Fallback to Nordic UART.
+             */
+
+            var nus =
+                await server.getPrimaryService(NUS_SERVICE);
+
+            characteristic =
+                await nus.getCharacteristic(NUS_RX);
+
+            var tx =
+                await nus.getCharacteristic(NUS_TX);
+
+            /*
+             * For NUS, notifications come from TX.
+             */
+            characteristic.notifyCharacteristic = tx;
+
+            log("Using NUS fallback");
+        }
 
 
-  /*
-  ============================================================
-  SEND BRUCE COMMAND
-  ============================================================
-  */
+        /*
+         * Native Bruce characteristic is both
+         * write + notify.
+         */
 
-  async function command(text) {
+        var notifyCharacteristic =
+            characteristic.notifyCharacteristic ||
+            characteristic;
 
-    response = "";
+        await notifyCharacteristic.startNotifications();
 
-    addLog(
-      ">> " + JSON.stringify(text),
-      "out"
+        notifyCharacteristic.addEventListener(
+            "characteristicvaluechanged",
+            onNotification
+        );
+
+        connected = true;
+
+        connectButton.textContent = "DISCONNECT";
+        syncButton.disabled = false;
+        saveButton.disabled = false;
+
+        status("Connected");
+
+        log("CONNECTED");
+
+    } catch (error) {
+
+        console.error(error);
+
+        status("Connection failed");
+
+        log("ERROR: " + error.message);
+    }
+}
+
+
+/* =========================================================
+   DISCONNECT
+   ========================================================= */
+
+function disconnected() {
+
+    connected = false;
+    characteristic = null;
+
+    connectButton.textContent = "CONNECT";
+
+    syncButton.disabled = true;
+    saveButton.disabled = true;
+
+    status("Disconnected");
+
+    log("DISCONNECTED");
+}
+
+
+async function disconnectBruce() {
+
+    if (device && device.gatt.connected) {
+        device.gatt.disconnect();
+    }
+
+    disconnected();
+}
+
+
+/* =========================================================
+   COMMAND
+   ========================================================= */
+
+async function command(cmd) {
+
+    /*
+     * Bruce serial commands terminate with CRLF.
+     */
+
+    rxBuffer = "";
+
+    await bleWrite(cmd + "\r\n");
+
+    /*
+     * Give Bruce time to execute.
+     */
+
+    await sleep(350);
+}
+
+
+/* =========================================================
+   WAIT FOR OUTPUT
+   ========================================================= */
+
+async function waitForOutput(timeout) {
+
+    var start = Date.now();
+
+    while (Date.now() - start < timeout) {
+
+        if (rxBuffer.length > 0) {
+            await sleep(150);
+            return rxBuffer;
+        }
+
+        await sleep(50);
+    }
+
+    return rxBuffer;
+}
+
+
+/* =========================================================
+   CLEAN BRUCE OUTPUT
+   ========================================================= */
+
+function cleanOutput(text, commandSent) {
+
+    var result = text;
+
+    /*
+     * Remove CR.
+     */
+    result = result.replace(/\r/g, "");
+
+    /*
+     * Remove echoed command.
+     */
+    result = result.replace(
+        commandSent.replace(/\r?\n/g, ""),
+        ""
     );
 
     /*
-     * Bruce serial CLI command terminator.
+     * Remove CLI prompt.
      */
+    result = result.replace(/^#\s*/gm, "");
 
-    await writeBytes(
-      encoder.encode(
-        text + "\r\n"
-      )
+    return result.trim();
+}
+
+
+/* =========================================================
+   ERROR DETECTION
+   ========================================================= */
+
+function hasBruceError(text) {
+
+    return (
+        /ERROR:/i.test(text) ||
+        /Command not found/i.test(text) ||
+        /Failed/i.test(text) ||
+        /Could not open/i.test(text)
     );
+}
 
-  }
 
+/* =========================================================
+   SYNC
+   ========================================================= */
 
-  /*
-  ============================================================
-  CONNECT
-  ============================================================
-  */
+async function syncFile() {
 
-  async function connect() {
-
-    if (!navigator.bluetooth) {
-
-      alert(
-        "Web Bluetooth is not available in this browser."
-      );
-
-      return;
-
-    }
-
-
-    try {
-
-      setStatus(
-        "Opening Bluetooth..."
-      );
-
-
-      device =
-        await navigator.bluetooth.requestDevice({
-
-          acceptAllDevices: true,
-
-          optionalServices: [
-            SERIAL_SERVICE
-          ]
-
-        });
-
-
-      device.addEventListener(
-        "gattserverdisconnected",
-        disconnected
-      );
-
-
-      setStatus(
-        "Connecting to " +
-        (device.name || "Bruce") +
-        "..."
-      );
-
-
-      const server =
-        await device.gatt.connect();
-
-
-      const service =
-        await server.getPrimaryService(
-          SERIAL_SERVICE
-        );
-
-
-      characteristic =
-        await service.getCharacteristic(
-          SERIAL_CHAR
-        );
-
-
-      await characteristic
-        .startNotifications();
-
-
-      characteristic.addEventListener(
-        "characteristicvaluechanged",
-        notification
-      );
-
-
-      connected = true;
-
-      connectBtn.textContent =
-        "Disconnect";
-
-      connectBtn.classList.add(
-        "connected"
-      );
-
-      syncBtn.disabled = false;
-      saveBtn.disabled = false;
-
-
-      setStatus(
-        "Connected to " +
-        (device.name || "Bruce")
-      );
-
-
-      addLog(
-        "BLE CONNECTED",
-        "in"
-      );
-
-    }
-
-    catch (error) {
-
-      addLog(
-        "CONNECT ERROR: " +
-        error.message,
-        "err"
-      );
-
-      setStatus(
-        "Connection failed: " +
-        error.message
-      );
-
-    }
-
-  }
-
-
-  /*
-  ============================================================
-  DISCONNECT
-  ============================================================
-  */
-
-  function disconnected() {
-
-    connected = false;
-
-    characteristic = null;
-
-    connectBtn.textContent =
-      "Connect";
-
-    connectBtn.classList.remove(
-      "connected"
-    );
-
-    syncBtn.disabled = true;
-    saveBtn.disabled = true;
-
-    setStatus(
-      "Disconnected"
-    );
-
-    addLog(
-      "BLE DISCONNECTED",
-      "err"
-    );
-
-  }
-
-
-  function disconnect() {
-
-    if (
-      device &&
-      device.gatt &&
-      device.gatt.connected
-    ) {
-
-      device.gatt.disconnect();
-
-    } else {
-
-      disconnected();
-
-    }
-
-  }
-
-
-  /*
-  ============================================================
-  SYNC
-  ============================================================
-
-  Reads ONLY:
-
-      !CHEAT/reader.txt
-
-  IMPORTANT:
-
-  Sync replaces the editor with the actual
-  Bruce file.
-
-  This avoids accidentally saving old browser
-  content back into Bruce.
-  */
-
-  async function sync() {
-
-    if (!connected)
-      return;
-
-
-    try {
-
-      setStatus(
-        "Reading !CHEAT/reader.txt..."
-      );
-
-
-      const commandText =
-        "storage read " +
-        BRUCE_PATH;
-
-
-      response = "";
-
-
-      await command(
-        commandText
-      );
-
-
-      /*
-       * Wait for Bruce to finish sending.
-       */
-
-      await sleep(1500);
-
-
-      let data =
-        response;
-
-
-      /*
-       * Remove command echo if Bruce
-       * sends it.
-       */
-
-      data =
-        data.replace(
-          commandText,
-          ""
-        );
-
-
-      /*
-       * Normalize CRLF.
-       */
-
-      data =
-        data.replace(
-          /\r/g,
-          ""
-        );
-
-
-      /*
-       * Remove leading/trailing blank lines.
-       */
-
-      data =
-        data.replace(
-          /^\n+/,
-          ""
-        );
-
-      data =
-        data.replace(
-          /\n+$/,
-          ""
-        );
-
-
-      /*
-       * Detect actual errors.
-       */
-
-      if (
-        /ERROR:/i.test(data) ||
-        /not found/i.test(data) ||
-        /no such file/i.test(data)
-      ) {
-
-        addLog(
-          "READ ERROR: " + data,
-          "err"
-        );
-
-        setStatus(
-          "Bruce could not read the file."
-        );
-
+    if (!connected) {
+        status("Not connected");
         return;
-
-      }
-
-
-      /*
-       * Don't replace the editor with
-       * nothing if no response arrived.
-       */
-
-      if (!data.trim()) {
-
-        addLog(
-          "Bruce returned no file data.",
-          "err"
-        );
-
-        setStatus(
-          "No data returned."
-        );
-
-        return;
-
-      }
-
-
-      /*
-       * THIS IS THE IMPORTANT PART:
-       *
-       * The editor now becomes the actual
-       * contents of reader.txt.
-       */
-
-      editor.value =
-        data;
-
-
-      try {
-
-        localStorage.setItem(
-          BACKUP,
-          editor.value
-        );
-
-      } catch (_) {}
-
-
-      setStatus(
-        "Synced from LittleFS://!CHEAT/reader.txt"
-      );
-
-
     }
 
-    catch (error) {
-
-      addLog(
-        "SYNC ERROR: " +
-        error.message,
-        "err"
-      );
-
-      setStatus(
-        "Sync failed."
-      );
-
-    }
-
-  }
-
-
-  /*
-  ============================================================
-  SAVE
-  ============================================================
-
-  Writes ONLY:
-
-      !CHEAT/reader.txt
-  */
-
-  async function save() {
-
-    if (!connected)
-      return;
-
+    syncButton.disabled = true;
 
     try {
 
-      const text =
-        editor.value;
+        status("Reading reader.txt...");
 
+        /*
+         * IMPORTANT:
+         *
+         * Bruce's serial documentation describes storage paths
+         * relative to the filesystem root.
+         *
+         * We deliberately do NOT add LittleFS:// to the CLI
+         * command. LittleFS is already the active filesystem
+         * because there is no SD card.
+         */
 
-      setStatus(
-        "Saving to LittleFS://!CHEAT/reader.txt..."
-      );
+        var cmd =
+            "storage read " +
+            TARGET_PATH;
 
+        await command(cmd);
 
-      /*
-       * Tell Bruce we are beginning
-       * a storage upload.
-       */
+        var output =
+            await waitForOutput(2500);
 
-      await command(
-        "storage write " +
-        BRUCE_PATH
-      );
+        log("READ RESPONSE:");
+        log(output);
 
+        if (hasBruceError(output)) {
 
-      /*
-       * Give Bruce time to enter
-       * file-write mode.
-       */
+            status("Bruce rejected the file path");
 
-      await sleep(300);
+            throw new Error(
+                "Bruce returned an error while reading " +
+                TARGET_PATH
+            );
+        }
 
+        var content =
+            cleanOutput(output, cmd);
 
-      /*
-       * Send every line separately.
-       *
-       * IMPORTANT:
-       * File data uses LF.
-       */
+        /*
+         * Do not replace the editor with the prompt or
+         * command echo.
+         */
 
-      const lines =
-        text.split(/\r?\n/);
+        editor.value = content;
 
-
-      for (
-        const line of lines
-      ) {
-
-        await writeBytes(
-          encoder.encode(
-            line + "\n"
-          )
+        status(
+            "Loaded " +
+            content.length +
+            " characters"
         );
 
-        await sleep(35);
+    } catch (error) {
 
-      }
+        status("Read failed");
 
+        log("READ ERROR: " + error.message);
 
-      /*
-       * Finish upload.
-       */
+    } finally {
 
-      await writeBytes(
-        encoder.encode(
-          "EOF\n"
-        )
-      );
+        syncButton.disabled = false;
+    }
+}
 
 
-      await sleep(1000);
+/* =========================================================
+   SAVE
+   ========================================================= */
 
+async function saveFile() {
 
-      try {
+    if (!connected) {
+        status("Not connected");
+        return;
+    }
 
-        localStorage.setItem(
-          BACKUP,
-          text
+    saveButton.disabled = true;
+
+    try {
+
+        var content = editor.value;
+
+        status("Starting upload...");
+
+        /*
+         * Start Bruce's text-file writer.
+         */
+
+        var cmd =
+            "storage write " +
+            TARGET_PATH;
+
+        await command(cmd);
+
+        await sleep(500);
+
+        /*
+         * If Bruce rejected the path, do NOT send the
+         * file contents or EOF.
+         */
+
+        if (
+            /ERROR:/i.test(rxBuffer) ||
+            /Command not found/i.test(rxBuffer)
+        ) {
+
+            log("WRITE START FAILED:");
+            log(rxBuffer);
+
+            throw new Error(
+                "Bruce did not enter storage-write mode"
+            );
+        }
+
+        /*
+         * Bruce's text upload protocol:
+         *
+         * one line per BLE write
+         * each line ends with LF
+         * EOF terminates the upload
+         *
+         * This is intentionally slow because Bruce's
+         * serial RX buffer is small.
+         */
+
+        var lines = content.split("\n");
+
+        for (var i = 0; i < lines.length; i++) {
+
+            var line = lines[i];
+
+            /*
+             * Remove CR because we send LF ourselves.
+             */
+            line = line.replace(/\r$/, "");
+
+            await bleWrite(line + "\n");
+
+            /*
+             * Pacing is important.
+             */
+            await sleep(80);
+        }
+
+        /*
+         * Close Bruce's text writer.
+         */
+        await bleWrite("EOF\n");
+
+        status("Waiting for Bruce...");
+
+        await sleep(1200);
+
+        log("WRITE RESPONSE:");
+        log(rxBuffer);
+
+        if (hasBruceError(rxBuffer)) {
+
+            throw new Error(
+                "Bruce reported an error during save"
+            );
+        }
+
+        /*
+         * IMPORTANT:
+         *
+         * Never claim success merely because BLE writes
+         * completed.
+         *
+         * Read the file back and verify it.
+         */
+
+        status("Verifying...");
+
+        rxBuffer = "";
+
+        await command(
+            "storage read " + TARGET_PATH
         );
 
-      } catch (_) {}
+        var verify =
+            await waitForOutput(2500);
+
+        log("VERIFY RESPONSE:");
+        log(verify);
+
+        if (hasBruceError(verify)) {
+
+            throw new Error(
+                "Verification read failed"
+            );
+        }
+
+        var savedContent =
+            cleanOutput(
+                verify,
+                "storage read " + TARGET_PATH
+            );
+
+        if (savedContent !== content) {
+
+            log(
+                "EXPECTED LENGTH: " +
+                content.length
+            );
+
+            log(
+                "DEVICE LENGTH: " +
+                savedContent.length
+            );
+
+            throw new Error(
+                "File was written but verification did not match"
+            );
+        }
+
+        status(
+            "Saved and verified: " +
+            TARGET_PATH
+        );
+
+    } catch (error) {
+
+        status("Save failed");
+
+        log("SAVE ERROR: " + error.message);
+
+    } finally {
+
+        saveButton.disabled = false;
+    }
+}
 
 
-      setStatus(
-        "Saved to LittleFS://!CHEAT/reader.txt"
-      );
+/* =========================================================
+   BUTTONS
+   ========================================================= */
 
+connectButton.addEventListener(
+    "click",
+    async function() {
 
-      addLog(
-        "SAVE COMPLETE",
-        "in"
-      );
+        if (connected) {
+            await disconnectBruce();
+        } else {
+            await connectBruce();
+        }
 
     }
-
-    catch (error) {
-
-      addLog(
-        "SAVE ERROR: " +
-        error.message,
-        "err"
-      );
-
-      setStatus(
-        "Save failed."
-      );
-
-    }
-
-  }
+);
 
 
-  /*
-  ============================================================
-  BUTTON EVENTS
-  ============================================================
-  */
-
-  connectBtn.addEventListener(
+syncButton.addEventListener(
     "click",
-    () => {
-
-      if (connected)
-        disconnect();
-      else
-        connect();
-
-    }
-  );
+    syncFile
+);
 
 
-  syncBtn.addEventListener(
+saveButton.addEventListener(
     "click",
-    sync
-  );
-
-
-  saveBtn.addEventListener(
-    "click",
-    save
-  );
-
-})();
+    saveFile
+);
 
 </script>
 
