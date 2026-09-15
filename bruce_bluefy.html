@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>Bruce BLE Remote</title>
+<style>
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#111;color:#fff;margin:0;padding:20px}
+.card{max-width:600px;margin:auto;background:#1d1d1f;border-radius:18px;padding:20px}
+h1{margin-top:0}button,input{font-size:17px;border:0;border-radius:12px;padding:14px;margin:5px 0}
+button{background:#333;color:white;width:100%}#connect{background:#0a84ff}
+input{width:calc(100% - 28px);background:#2c2c2e;color:white}
+#status{padding:12px;border-radius:10px;background:#2c2c2e;margin:12px 0}
+pre{white-space:pre-wrap;background:#0b0b0b;padding:12px;border-radius:10px;min-height:80px}
+.small{color:#aaa;font-size:13px}
+</style>
+</head>
+<body>
+<div class="card">
+<h1>🦈 Bruce BLE Remote</h1>
+<div id="status">Disconnected</div>
+<button id="connect">Connect to Bruce</button>
+
+<h3>Test</h3>
+<button onclick="sendCmd('help')">Send HELP</button>
+
+<h3>Send command</h3>
+<input id="cmd" placeholder="Example: help">
+<button onclick="sendInput()">SEND</button>
+
+<h3>Output</h3>
+<pre id="log"></pre>
+<div class="small">Bruce BLE API • Web Bluetooth • Bluefy</div>
+</div>
+
+<script>
+const SERVICE="4371EC0B-3D43-49F9-B731-7C72A4A7BB91";
+const CHAR="D555ED97-BF2A-4F46-B3EB-D1FCDD7325E9";
+const NUS_SERVICE="6E400001-B5A3-F393-E0A9-E50E24DCCA9E";
+const NUS_RX="6E400002-B5A3-F393-E0A9-E50E24DCCA9E";
+const NUS_TX="6E400003-B5A3-F393-E0A9-E50E24DCCA9E";
+
+let device=null, characteristic=null;
+
+function log(s){document.getElementById("log").textContent += s+"\n";}
+function status(s){document.getElementById("status").textContent=s;}
+
+async function connect(){
+ try{
+   status("Opening Bluetooth picker...");
+   device=await navigator.bluetooth.requestDevice({
+     acceptAllDevices:true,
+     optionalServices:[SERVICE,NUS_SERVICE,"battery_service"]
+   });
+   device.addEventListener("gattserverdisconnected",()=>{
+     status("Disconnected"); characteristic=null;
+   });
+   const server=await device.gatt.connect();
+
+   try{
+     const svc=await server.getPrimaryService(SERVICE);
+     characteristic=await svc.getCharacteristic(CHAR);
+   }catch(e){
+     const svc=await server.getPrimaryService(NUS_SERVICE);
+     characteristic=await svc.getCharacteristic(NUS_RX);
+     const tx=await svc.getCharacteristic(NUS_TX);
+     await tx.startNotifications();
+     tx.addEventListener("characteristicvaluechanged", receive);
+   }
+
+   try{
+     await characteristic.startNotifications();
+     characteristic.addEventListener("characteristicvaluechanged", receive);
+   }catch(e){}
+
+   status("🟢 Connected to "+(device.name||"Bruce"));
+   log("Connected: "+(device.name||"Bruce"));
+ }catch(e){
+   status("❌ Connection failed");
+   log("Error: "+e.message);
+ }
+}
+
+function receive(event){
+ const bytes=new Uint8Array(event.target.value.buffer);
+ const text=new TextDecoder().decode(bytes);
+ log("← "+text);
+}
+
+async function sendCmd(cmd){
+ if(!characteristic){alert("Connect to Bruce first.");return;}
+ try{
+   await characteristic.writeValue(new TextEncoder().encode(cmd+"\r\n"));
+   log("→ "+cmd);
+ }catch(e){log("Send error: "+e.message);}
+}
+
+function sendInput(){
+ const x=document.getElementById("cmd");
+ if(x.value.trim()) sendCmd(x.value.trim());
+}
+
+document.getElementById("connect").onclick=connect;
+</script>
+</body>
+</html>
